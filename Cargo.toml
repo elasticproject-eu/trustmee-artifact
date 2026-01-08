@@ -9,7 +9,10 @@ members = [
     "integration-tests",
     "tools/trustee-cli",
     "deps/key-value-storage",
-    "deps/policy-engine"
+    "deps/policy-engine",
+    "wasm-components/dcap-qvl-wasi",
+    "wasm-components/tdx-verifier-component",
+    "wasm-components/tdx-verifier-test"
 ]
 resolver = "2"
 

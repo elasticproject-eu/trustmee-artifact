@@ -1,0 +1,27 @@
+[package]
+name = "tdx-verifier-component"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+test = false
+doctest = false
+
+[package.metadata.component]
+package = "trustee:verifier"
+
+[dependencies]
+anyhow.workspace = true
+base64.workspace = true
+bitflags = "2.10.0"
+byteorder.workspace = true
+dcap-qvl = { version = "0.3.4", default-features = false, features = ["std"] }
+dcap-qvl-wasi = { path = "../dcap-qvl-wasi", features = ["wasi-http"] }
+eventlog = { path = "../../deps/eventlog" }
+hex.workspace = true
+scroll = { version = "0.13.0", default-features = false, features = ["derive"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+wit-bindgen = "0.46.0"

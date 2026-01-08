@@ -1,0 +1,24 @@
+[package]
+name = "dcap-qvl-wasi"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+dcap-qvl = { version = "0.3.4", default-features = false, features = ["std"] }
+der = "0.7.10"
+hex.workspace = true
+pem = "3.0.5"
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+urlencoding = "2.1.3"
+x509-cert = "0.2.5"
+
+# WASI HTTP client; only used when the verifier is built for `wasm32`.
+waki = { version = "0.5.1", optional = true }
+
+[features]
+default = []
+wasi-http = ["dep:waki"]
