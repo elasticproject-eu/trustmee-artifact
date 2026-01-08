@@ -25,6 +25,7 @@ use sev::{
 };
 use std::{
     collections::HashMap,
+    env,
     hash::Hash,
     result::Result::Ok,
     sync::{LazyLock, OnceLock},
@@ -103,6 +104,27 @@ static VCEK_CACHE_MANAGER: OnceLock<MokaManager> = OnceLock::new();
 
 fn init_cache_manager() -> MokaManager {
     MokaManager::new(MokaCacheBuilder::new(1024).build())
+}
+
+fn timing_enabled() -> bool {
+    match env::var("SNP_STEP_TIMING_JSON") {
+        Ok(v) => matches!(
+            v.to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        ),
+        Err(_) => false,
+    }
+}
+
+fn timing_mode() -> String {
+    env::var("SNP_TIMING_MODE").unwrap_or_else(|_| "native".to_string())
+}
+
+fn log_step_timing(mode: &str, cert_chain_ms: f64, signature_ms: f64, total_ms: f64) {
+    let others_ms = (total_ms - cert_chain_ms - signature_ms).max(0.0);
+    eprintln!(
+        "{{\"event\":\"snp_step_timing\",\"mode\":\"{mode}\",\"cert_chain_ms\":{cert_chain_ms:.3},\"signature_ms\":{signature_ms:.3},\"others_ms\":{others_ms:.3},\"total_ms\":{total_ms:.3}}}",
+    );
 }
 
 #[derive(Clone, Debug, Default)]
@@ -265,6 +287,11 @@ impl Verifier for Snp {
             attestation_report: report,
             cert_chain,
         } = serde_json::from_value(evidence).context("Deserialize SNP Evidence failed")?;
+        let timing_on = timing_enabled();
+        let timing_mode = if timing_on { timing_mode() } else { String::new() };
+        let total_start = if timing_on { Some(Instant::now()) } else { None };
+        let mut cert_chain_ms = 0.0;
+        let mut signature_ms = 0.0;
 
         // See Trustee Issue#589 https://github.com/confidential-containers/trustee/issues/589
         // Version 3 minimum is needed to tell processor type in report
@@ -342,9 +369,17 @@ impl Verifier for Snp {
                 };
 
                 // Verify the chain and return vek if succesful
-                chain
-                    .verify()
-                    .context("Certificate chain provided by user failed to verify")?;
+                if timing_on {
+                    let start = Instant::now();
+                    chain
+                        .verify()
+                        .context("Certificate chain provided by user failed to verify")?;
+                    cert_chain_ms = start.elapsed().as_secs_f64() * 1000.0;
+                } else {
+                    chain
+                        .verify()
+                        .context("Certificate chain provided by user failed to verify")?;
+                }
 
                 // Return the vek
                 vek.clone()
@@ -369,9 +404,17 @@ impl Verifier for Snp {
                 };
 
                 // Verify the chain and return vek if succesful
-                chain
-                    .verify()
-                    .context("Certificate chain from KDS failed verification")?;
+                if timing_on {
+                    let start = Instant::now();
+                    chain
+                        .verify()
+                        .context("Certificate chain from KDS failed verification")?;
+                    cert_chain_ms = start.elapsed().as_secs_f64() * 1000.0;
+                } else {
+                    chain
+                        .verify()
+                        .context("Certificate chain from KDS failed verification")?;
+                }
 
                 // Return the vcek
                 vcek.clone()
@@ -379,9 +422,17 @@ impl Verifier for Snp {
         };
 
         // Verify the report signature using the VEK
-        (&vek, &report)
-            .verify()
-            .context("Report signature verification against VEK signature failed")?;
+        if timing_on {
+            let start = Instant::now();
+            (&vek, &report)
+                .verify()
+                .context("Report signature verification against VEK signature failed")?;
+            signature_ms = start.elapsed().as_secs_f64() * 1000.0;
+        } else {
+            (&vek, &report)
+                .verify()
+                .context("Report signature verification against VEK signature failed")?;
+        }
 
         // Verify the TCB values in the report against the VEK
         verify_report_tcb(&report, vek, proc_gen).context("Reported TCB values do not match")?;
@@ -417,6 +468,12 @@ impl Verifier for Snp {
 
         let claims_map = parse_tee_evidence(&report);
         let json = json!(claims_map);
+        if timing_on {
+            if let Some(start) = total_start {
+                let total_ms = start.elapsed().as_secs_f64() * 1000.0;
+                log_step_timing(&timing_mode, cert_chain_ms, signature_ms, total_ms);
+            }
+        }
         Ok(vec![(json, "cpu".to_string())])
     }
 }

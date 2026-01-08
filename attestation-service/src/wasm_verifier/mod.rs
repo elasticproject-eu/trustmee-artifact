@@ -333,6 +333,12 @@ impl HostState {
         let mut wasi = WasiCtxBuilder::new();
         wasi.inherit_stdio();
         wasi.env("DCAP_QVL_CACHE_DIR", "cache");
+        if let Ok(v) = std::env::var("SNP_STEP_TIMING_JSON") {
+            wasi.env("SNP_STEP_TIMING_JSON", v);
+        }
+        if let Ok(v) = std::env::var("SNP_TIMING_MODE") {
+            wasi.env("SNP_TIMING_MODE", v);
+        }
         wasi.preopened_dir(wasi_cache_dir, "cache", DirPerms::all(), FilePerms::all())
             .with_context(|| format!("preopen {}", wasi_cache_dir.display()))?;
 

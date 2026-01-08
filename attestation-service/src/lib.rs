@@ -19,6 +19,7 @@ use config::Config;
 use rvps::RvpsError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::time::Instant;
 use thiserror::Error;
 use tokio::fs;
 use tracing::{debug, info};
@@ -32,6 +33,16 @@ fn serialize_canon_json<T: Serialize>(value: T) -> Result<Vec<u8>> {
     let mut ser = serde_json::Serializer::with_formatter(&mut buf, CanonicalFormatter::new());
     value.serialize(&mut ser)?;
     Ok(buf)
+}
+
+fn env_flag(name: &str) -> bool {
+    match std::env::var(name) {
+        Ok(v) => matches!(
+            v.to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        ),
+        Err(_) => false,
+    }
 }
 
 pub type TeeEvidence = serde_json::Value;
@@ -207,12 +218,14 @@ impl AttestationService {
         policy_ids: Vec<String>,
     ) -> Result<String> {
         let mut tee_claims: Vec<TeeClaims> = vec![];
+        let timing_enabled = env_flag("AS_VERIFICATION_TIMING_JSON");
 
         if verification_requests.is_empty() {
             bail!("No verification requests provided.")
         }
 
         for verification_request in verification_requests {
+            let tee_label = format!("{:?}", verification_request.tee);
             let (report_data, runtime_data_claims) = parse_runtime_data(
                 verification_request.runtime_data,
                 &verification_request.runtime_data_hash_algorithm,
@@ -246,6 +259,7 @@ impl AttestationService {
                     );
                 }
 
+                let verify_start = Instant::now();
                 let parsed = host
                     .evaluate(
                         component_id,
@@ -262,6 +276,13 @@ impl AttestationService {
                     )
                     .await
                     .context("wasm verifier evaluate")?;
+                if timing_enabled {
+                    let ms = verify_start.elapsed().as_secs_f64() * 1000.0;
+                    eprintln!(
+                        "{{\"event\":\"as_verifier_timing\",\"tee\":\"{tee}\",\"mode\":\"wasm\",\"ms\":{ms:.3}}}",
+                        tee = tee_label,
+                    );
+                }
 
                 vec![(parsed, "cpu".to_string())]
             } else {
@@ -270,10 +291,19 @@ impl AttestationService {
                     self.config.clone().verifier_config,
                 )
                 .await?;
-                verifier
+                let verify_start = Instant::now();
+                let claims = verifier
                     .evaluate(verification_request.evidence, &report_data, &init_data_hash)
                     .await
-                    .map_err(|e| anyhow!("Verifier evaluate failed: {e:?}"))?
+                    .map_err(|e| anyhow!("Verifier evaluate failed: {e:?}"))?;
+                if timing_enabled {
+                    let ms = verify_start.elapsed().as_secs_f64() * 1000.0;
+                    eprintln!(
+                        "{{\"event\":\"as_verifier_timing\",\"tee\":\"{tee}\",\"mode\":\"native\",\"ms\":{ms:.3}}}",
+                        tee = tee_label,
+                    );
+                }
+                claims
             };
 
             for (claims_from_tee_evidence, tee_class) in claims {
