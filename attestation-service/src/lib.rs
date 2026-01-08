@@ -7,6 +7,7 @@ pub mod config;
 pub mod ear_token;
 pub mod policy_engine;
 pub mod rvps;
+mod wasm_verifier;
 use crate::rvps::RvpsClient;
 
 use canon_json::CanonicalFormatter;
@@ -24,6 +25,7 @@ use tracing::{debug, info};
 use verifier::{InitDataHash, ReportData, TeeEvidenceParsedClaim};
 
 use crate::ear_token::EarAttestationTokenBroker;
+use crate::wasm_verifier::WasmVerifierHost;
 
 fn serialize_canon_json<T: Serialize>(value: T) -> Result<Vec<u8>> {
     let mut buf = Vec::new();
@@ -119,12 +121,20 @@ pub struct VerificationRequest {
     /// The concrete way of checking is decide by the enum type. If this parameter is set `None`, the comparation
     /// will not be performed.
     pub init_data: Option<InitDataInput>,
+
+    /// Optional Wasm component verifier bytes (base64-decoded) provided inline
+    /// with the attestation request.
+    pub verifier_component: Option<Vec<u8>>,
+
+    /// Optional component ID of a previously registered Wasm component verifier.
+    pub verifier_component_id: Option<String>,
 }
 
 pub struct AttestationService {
     config: Config,
     rvps: RvpsClient,
     token_broker: EarAttestationTokenBroker,
+    wasm_verifier: Option<WasmVerifierHost>,
 }
 
 impl AttestationService {
@@ -143,11 +153,24 @@ impl AttestationService {
         let token_broker =
             EarAttestationTokenBroker::new(config.attestation_token_broker.clone()).await?;
 
+        let wasm_verifier = WasmVerifierHost::new(&config)
+            .await
+            .map_err(ServiceError::Anyhow)?;
+
         Ok(Self {
             config,
             rvps,
             token_broker,
+            wasm_verifier,
         })
+    }
+
+    /// Register a Wasm component verifier and get a stable component ID back.
+    pub async fn register_component_verifier(&self, component_bytes: &[u8]) -> Result<String> {
+        let Some(host) = &self.wasm_verifier else {
+            bail!("wasm verifier hosting is disabled in config");
+        };
+        host.register_component(component_bytes).await
     }
 
     /// Set Attestation Verification Policy.
@@ -190,12 +213,6 @@ impl AttestationService {
         }
 
         for verification_request in verification_requests {
-            let verifier = verifier::to_verifier(
-                &verification_request.tee,
-                self.config.clone().verifier_config,
-            )
-            .await?;
-
             let (report_data, runtime_data_claims) = parse_runtime_data(
                 verification_request.runtime_data,
                 &verification_request.runtime_data_hash_algorithm,
@@ -215,10 +232,49 @@ impl AttestationService {
                 None => InitDataHash::NotProvided,
             };
 
-            let claims = verifier
-                .evaluate(verification_request.evidence, &report_data, &init_data_hash)
-                .await
-                .map_err(|e| anyhow!("Verifier evaluate failed: {e:?}"))?;
+            let claims = if let Some(host) = &self.wasm_verifier {
+                let default_component_id = self.config.wasm_verifier.default_component_id.as_deref();
+                let component_id = verification_request
+                    .verifier_component_id
+                    .as_deref()
+                    .or(default_component_id);
+                let component_bytes = verification_request.verifier_component.as_deref();
+
+                if component_id.is_none() && component_bytes.is_none() {
+                    bail!(
+                        "wasm verifier hosting is enabled, but no verifier component was provided and no `wasm_verifier.default_component_id` is configured"
+                    );
+                }
+
+                let parsed = host
+                    .evaluate(
+                        component_id,
+                        component_bytes,
+                        &verification_request.evidence,
+                        match &report_data {
+                            ReportData::Value(v) => Some(*v),
+                            ReportData::NotProvided => None,
+                        },
+                        match &init_data_hash {
+                            InitDataHash::Value(v) => Some(*v),
+                            InitDataHash::NotProvided => None,
+                        },
+                    )
+                    .await
+                    .context("wasm verifier evaluate")?;
+
+                vec![(parsed, "cpu".to_string())]
+            } else {
+                let verifier = verifier::to_verifier(
+                    &verification_request.tee,
+                    self.config.clone().verifier_config,
+                )
+                .await?;
+                verifier
+                    .evaluate(verification_request.evidence, &report_data, &init_data_hash)
+                    .await
+                    .map_err(|e| anyhow!("Verifier evaluate failed: {e:?}"))?
+            };
 
             for (claims_from_tee_evidence, tee_class) in claims {
                 info!(

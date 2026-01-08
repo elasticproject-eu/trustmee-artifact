@@ -57,6 +57,18 @@ The value is a base64 encoded JWT. The body of the JWT is showed in the [example
 
 More configuration items please refer to the [document](./config.md).
 
+## Wasm Component Verifiers
+
+This build can host platform-specific verifiers as Wasm *components* (Component Model) instead of native verifier drivers.
+
+- `POST /component`: register a verifier component and get a `component_id` back.
+- `POST /attestation`: each `verification_request` can either embed a verifier component (`verifier_component`) or refer to a previously registered component (`verifier_component_id`).
+
+Notes:
+- `verifier_component` is base64url (no pad) encoded raw `.wasm` component bytes.
+- If both `verifier_component` and `verifier_component_id` are provided, `verifier_component` takes precedence and is deduplicated/registered by hash.
+- If neither is provided, the service uses `wasm_verifier.default_component_id` (if configured) or rejects the request.
+
 ## Advanced Topics
 
 ### Building from Source

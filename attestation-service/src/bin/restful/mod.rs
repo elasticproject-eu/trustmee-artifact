@@ -53,6 +53,10 @@ pub struct AttestationRequest {
 pub struct IndividualAttestationRequest {
     tee: String,
     evidence: String,
+    /// Base64url (no pad) encoded Wasm component bytes.
+    verifier_component: Option<String>,
+    /// Component ID returned by the Component Registration API.
+    verifier_component_id: Option<String>,
     runtime_data: Option<RuntimeData>,
     init_data: Option<InitDataInput>,
     runtime_data_hash_algorithm: Option<String>,
@@ -150,6 +154,15 @@ pub async fn attestation(
         let evidence =
             serde_json::from_slice(&evidence).context("failed to parse evidence as JSON")?;
 
+        let verifier_component = match attestation_request.verifier_component.as_deref() {
+            Some(s) => Some(
+                URL_SAFE_NO_PAD
+                    .decode(s)
+                    .context("base64 decode verifier component")?,
+            ),
+            None => None,
+        };
+
         let tee = to_tee(&attestation_request.tee)?;
 
         let runtime_data = attestation_request
@@ -179,6 +192,8 @@ pub async fn attestation(
             runtime_data,
             runtime_data_hash_algorithm,
             init_data,
+            verifier_component,
+            verifier_component_id: attestation_request.verifier_component_id,
         });
     }
 
@@ -198,6 +213,41 @@ pub async fn attestation(
     debug!("Attestation Token: {token}");
     info!("AttestationEvaluate succeeded.");
     Ok(HttpResponse::Ok().body(token))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RegisterComponentRequest {
+    /// Base64url (no pad) encoded Wasm component bytes.
+    verifier_component: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RegisterComponentResponse {
+    component_id: String,
+}
+
+#[instrument(skip_all, fields(request_id = tracing::field::Empty))]
+pub async fn register_component(
+    request: web::Json<RegisterComponentRequest>,
+    cocoas: web::Data<Arc<RwLock<AttestationService>>>,
+) -> Result<HttpResponse> {
+    let request_id = Uuid::new_v4().to_string();
+    Span::current().record("request_id", tracing::field::display(&request_id));
+    info!("Component Registration API called.");
+
+    let request = request.into_inner();
+    let component_bytes = URL_SAFE_NO_PAD
+        .decode(&request.verifier_component)
+        .context("base64 decode verifier component")?;
+
+    let component_id = cocoas
+        .read()
+        .await
+        .register_component_verifier(&component_bytes)
+        .await
+        .context("register component verifier")?;
+
+    Ok(HttpResponse::Ok().json(RegisterComponentResponse { component_id }))
 }
 
 #[derive(Deserialize, Debug)]

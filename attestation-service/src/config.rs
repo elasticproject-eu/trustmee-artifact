@@ -29,6 +29,65 @@ pub struct Config {
     /// Optional configuration for verifier modules
     #[serde(default)]
     pub verifier_config: Option<VerifierConfig>,
+
+    /// Configuration for hosting Wasm component verifiers.
+    #[serde(default)]
+    pub wasm_verifier: WasmVerifierConfig,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct WasmVerifierConfig {
+    /// Enable loading and invoking Wasm component verifiers.
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// If `false`, Wasm components must carry a valid `wasmsign2` signature that
+    /// matches one of the `trusted_public_keys`.
+    #[serde(default)]
+    pub allow_unsigned: bool,
+
+    /// Trusted public keys used to validate uploaded Wasm components.
+    /// Keys can be in `wasmsign2` raw format, DER, PEM, or OpenSSH public key format.
+    #[serde(default)]
+    pub trusted_public_keys: Vec<PathBuf>,
+
+    /// Optional directory for storing registered components. When unset,
+    /// defaults to `<work_dir>/components`.
+    #[serde(default)]
+    pub registry_dir: Option<PathBuf>,
+
+    /// Optional default component ID to use when a request does not include
+    /// `verifier_component` (inline) or `verifier_component_id` (cache reference).
+    ///
+    /// This enables gRPC/KBS callers (or legacy clients) to keep sending only
+    /// evidence while the AS fetches the verifier component from its registry.
+    #[serde(default)]
+    pub default_component_id: Option<String>,
+
+    /// Optional directory pre-opened to Wasm components as `cache/` for
+    /// collateral caching. When unset, defaults to `<work_dir>/wasm-cache`.
+    #[serde(default)]
+    pub wasi_cache_dir: Option<PathBuf>,
+
+    /// Optional Wasmtime cache config file path. When unset, defaults to
+    /// `<work_dir>/wasmtime-cache.toml` (created automatically) and stores cache
+    /// artifacts under `<work_dir>/wasmtime-cache/`.
+    #[serde(default)]
+    pub wasmtime_cache_config: Option<PathBuf>,
+}
+
+impl Default for WasmVerifierConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            allow_unsigned: false,
+            trusted_public_keys: vec![],
+            registry_dir: None,
+            default_component_id: None,
+            wasi_cache_dir: None,
+            wasmtime_cache_config: None,
+        }
+    }
 }
 
 fn default_work_dir() -> PathBuf {
@@ -55,6 +114,7 @@ impl Default for Config {
             rvps_config: RvpsConfig::default(),
             attestation_token_broker: EarTokenConfiguration::default(),
             verifier_config: None,
+            wasm_verifier: WasmVerifierConfig::default(),
         }
     }
 }
@@ -115,6 +175,7 @@ mod tests {
             profile_name: "tag:github.com,2024:confidential-containers/Trustee".into()
         },
         verifier_config: None,
+        wasm_verifier: crate::config::WasmVerifierConfig::default(),
     })]
     #[case("./tests/configs/example2.json", Config {
         work_dir: PathBuf::from("/var/lib/attestation-service/"),
@@ -136,6 +197,7 @@ mod tests {
             })
         },
         verifier_config: None,
+        wasm_verifier: crate::config::WasmVerifierConfig::default(),
     })]
     fn read_config(#[case] config: &str, #[case] expected: Config) {
         let config = std::fs::read_to_string(config).unwrap();

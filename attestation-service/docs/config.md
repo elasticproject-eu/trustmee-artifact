@@ -18,9 +18,25 @@ section:
 | `work_dir`                 | String                      | The location for Attestation Service to store data. | False      | Firstly try to read from ENV `AS_WORK_DIR`. If not any, use `/opt/confidential-containers/attestation-service`       |
 | `rvps_config`              | [RVPSConfiguration][2]      | RVPS configuration                                  | False      | -       |
 | `attestation_token_broker` | [AttestationTokenBroker][1]  | Attestation result token configuration.            | False      | -       |
+| `wasm_verifier`            | [WasmVerifier][3]           | Host Wasm component verifiers.       | False      | Disabled |
 
 [1]: #attestationtokenbroker
 [2]: #rvps-configuration
+[3]: #wasmverifier
+
+#### WasmVerifier
+
+This section is **optional**. When enabled, the Attestation Service can load and invoke platform-specific verifier logic as Wasm *components*.
+
+| Property               | Type              | Description | Required | Default |
+|------------------------|-------------------|-------------|----------|---------|
+| `enabled`              | Boolean           | Enable Wasm component verifier hosting. | No | `false` |
+| `allow_unsigned`       | Boolean           | If `false`, uploaded components must be signed with `wasmsign2` and verify against `trusted_public_keys`. | No | `false` |
+| `trusted_public_keys`  | Array of String   | Paths to trusted public keys (raw/DER/PEM/OpenSSH) for verifying components. | No | `[]` |
+| `registry_dir`         | String            | Directory to store registered components; defaults to `<work_dir>/components`. | No | - |
+| `default_component_id` | String            | Default verifier component ID to use when a request does not provide `verifier_component` or `verifier_component_id`. | No | - |
+| `wasi_cache_dir`       | String            | Directory pre-opened to components as `cache/` (for collateral caching); defaults to `<work_dir>/wasm-cache`. | No | - |
+| `wasmtime_cache_config`| String            | Wasmtime cache config file path; defaults to `<work_dir>/wasmtime-cache.toml`. | No | - |
 
 #### AttestationTokenBroker
 

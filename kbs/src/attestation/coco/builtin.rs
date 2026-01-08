@@ -37,6 +37,8 @@ impl Attest for BuiltInCoCoAs {
                 runtime_data: Some(RuntimeData::Structured(evidence.runtime_data)),
                 runtime_data_hash_algorithm: HashAlgorithm::Sha384,
                 init_data: None,
+                verifier_component: None,
+                verifier_component_id: None,
             };
             if let Some(init_data) = evidence.init_data {
                 if init_data.format != "toml" {

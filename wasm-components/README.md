@@ -1,13 +1,13 @@
 This directory contains standalone WebAssembly components used by this project.
 
-- `tdx-verifier-component`: a Wasm *component* implementing the thesis WIT interface (`world verifier`) for Intel TDX quote verification.
+- `tdx-verifier-component`: a Wasm *component* implementing the WIT interface (`world verifier`) for Intel TDX quote verification.
 - `tdx-verifier-test`: a native host CLI that loads the component with Wasmtime and calls `evaluate` using a local TDX quote (and optional CCEL).
 
 ## Build the component
 
 From the repo root:
 
-`cargo component build -p tdx-verifier-component --release --target wasm32-wasip2`
+`cargo component build -p tdx-verifier-component --release --target wasm32-wasip1`
 
 The resulting component is created at `target/wasm32-wasip1/release/tdx_verifier_component.wasm`.
 
@@ -24,3 +24,7 @@ Optional inputs:
 - `--cache-dir <host-dir>` (collateral cache; pre-opened to the component as `cache/`)
 
 On verification failure, the component returns JSON like `{"status":"failed","error":"..."}` and the host exits non-zero.
+
+## Smoke test Trustee integration (RESTful-AS)
+
+`bash wasm-components/scripts/smoke-restful-as-wasm-tdx.sh`

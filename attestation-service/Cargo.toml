@@ -72,6 +72,10 @@ tracing-subscriber.workspace = true
 uuid = { version = "1.19.0", features = ["v4"] }
 verifier = { path = "../deps/verifier", default-features = false }
 actix-cors = { version = "0.7", optional = true }
+wasmtime = { version = "25.0.0", features = ["component-model", "cache"] }
+wasmtime-wasi = "25.0.0"
+wasmtime-wasi-http = "25.0.0"
+wasmsign2 = "0.2.6"
 
 [build-dependencies]
 shadow-rs.workspace = true
