@@ -84,4 +84,4 @@ tracing = "0.1.43"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 
 [patch.crates-io]
-dcap-qvl = { git = "https://github.com/Phala-Network/dcap-qvl.git", tag = "v0.3.6" }
+dcap-qvl = { path = "deps/dcap-qvl" }
