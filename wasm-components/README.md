@@ -13,7 +13,7 @@ From the repo root:
 
 The resulting component is created at `target/wasm32-wasip1/release/tdx_verifier_component.wasm`.
 
-For AMD SEV-SNP, the verifier depends on OpenSSL. Build OpenSSL for `wasm32-wasip1` and point `OPENSSL_DIR` to it, and enable SIMD128:
+For AMD SEV-SNP, the verifier depends on OpenSSL (Used https://github.com/jedisct1/openssl-wasm). Build OpenSSL for `wasm32-wasip1` and point `OPENSSL_DIR` to it, and enable SIMD128:
 
 `RUSTFLAGS='-C target-feature=+simd128' OPENSSL_DIR=/path/to/wasm-openssl cargo component build -p snp-verifier-component --release --target wasm32-wasip1`
 

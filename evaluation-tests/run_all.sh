@@ -16,11 +16,16 @@ run_latency() {
   local mode="$2"
   local out="$3"
   shift 3
+  local dump_arg=()
+  if [[ -n "${DUMP_REQUEST:-}" ]]; then
+    dump_arg=(--dump-request "$DUMP_REQUEST")
+  fi
   python3 "$BIN_DIR/eval_latency.py" \
     --url "$AS_URL" \
     --tee "$tee" \
     --runs 100 \
     --output "$out" \
+    "${dump_arg[@]}" \
     "$@"
 }
 

@@ -86,7 +86,7 @@ def default_snp_evidence_path() -> str:
 
 
 def default_tdx_quote_path() -> str:
-    return str(repo_root() / "tdx_quote.bin")
+    return str(repo_root() / "tdx_quote2.bin")
 
 
 def default_snp_report_path() -> str:

@@ -31,6 +31,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-retries", type=int, default=0)
     p.add_argument("--retry-initial", type=float, default=1.0)
     p.add_argument("--retry-backoff", type=float, default=2.0)
+    p.add_argument("--dump-request")
     p.add_argument("--output")
     return p.parse_args()
 
@@ -48,6 +49,10 @@ def main() -> int:
     request = build_attestation_request(
         args.tee, evidence_b64, args.component_id, args.component_path
     )
+    if args.dump_request:
+        payload = json.dumps(request, separators=(",", ":"))
+        with open(args.dump_request, "w", encoding="utf-8") as f:
+            f.write(payload + "\n")
 
     for _ in range(args.warmup):
         status, _ = post_json(args.url, request, timeout=args.timeout)

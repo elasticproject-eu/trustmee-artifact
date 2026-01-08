@@ -1,4 +1,5 @@
 use anyhow::{anyhow, bail, Context, Result};
+use base64::Engine as _;
 use dcap_qvl::QuoteCollateralV3;
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -36,6 +37,10 @@ impl PcsEndpoints {
         self.mk_url("sgx", &format!("pckcrl?ca={}&encoding=der", self.ca))
     }
 
+    fn url_pckcrl_pem(&self) -> String {
+        self.mk_url("sgx", &format!("pckcrl?ca={}&encoding=pem", self.ca))
+    }
+
     fn url_rootcacrl(&self) -> String {
         self.mk_url("sgx", "rootcacrl")
     }
@@ -70,7 +75,47 @@ fn now_secs() -> Result<u64> {
 
 fn read_cache(cache_path: &Path) -> Option<QuoteCollateralV3> {
     let data = fs::read(cache_path).ok()?;
-    serde_json::from_slice(&data).ok()
+    let value: serde_json::Value = serde_json::from_slice(&data).ok()?;
+    let obj = value.as_object()?;
+
+    let pck_crl_issuer_chain = obj.get("pck_crl_issuer_chain")?.as_str()?.to_owned();
+    let mut root_ca_crl = decode_bytes_value(obj.get("root_ca_crl")?)?;
+    let mut pck_crl = decode_bytes_value(obj.get("pck_crl")?)?;
+    let tcb_info_issuer_chain = obj.get("tcb_info_issuer_chain")?.as_str()?.to_owned();
+    let tcb_info = obj.get("tcb_info")?.as_str()?.to_owned();
+    let tcb_info_signature = decode_bytes_value(obj.get("tcb_info_signature")?)?;
+    let qe_identity_issuer_chain = obj.get("qe_identity_issuer_chain")?.as_str()?.to_owned();
+    let qe_identity = obj.get("qe_identity")?.as_str()?.to_owned();
+    let qe_identity_signature = decode_bytes_value(obj.get("qe_identity_signature")?)?;
+    let pck_certificate_chain = obj
+        .get("pck_certificate_chain")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_owned());
+
+    normalize_crl_bytes(&mut root_ca_crl);
+    normalize_crl_bytes(&mut pck_crl);
+    if !looks_like_der_crl(&root_ca_crl) {
+        trim_der_trailing(&mut root_ca_crl);
+    }
+    if !looks_like_der_crl(&pck_crl) {
+        trim_der_trailing(&mut pck_crl);
+    }
+    if !looks_like_der_crl(&root_ca_crl) || !looks_like_der_crl(&pck_crl) {
+        return None;
+    }
+
+    Some(QuoteCollateralV3 {
+        pck_crl_issuer_chain,
+        root_ca_crl,
+        pck_crl,
+        tcb_info_issuer_chain,
+        tcb_info,
+        tcb_info_signature,
+        qe_identity_issuer_chain,
+        qe_identity,
+        qe_identity_signature,
+        pck_certificate_chain,
+    })
 }
 
 fn write_cache(cache_path: &Path, collateral: &QuoteCollateralV3) -> Result<()> {
@@ -131,9 +176,115 @@ fn get_header(headers: &[(String, String)], name: &str) -> Result<String> {
     Ok(value.into_owned())
 }
 
-fn try_decode_hex_crl(bytes: &[u8]) -> Option<Vec<u8>> {
+fn decode_hex_string(s: &str) -> Option<Vec<u8>> {
+    let filtered: String = s.chars().filter(|c| !c.is_whitespace()).collect();
+    if filtered.is_empty()
+        || filtered.len() % 2 != 0
+        || !filtered.as_bytes().iter().all(|b| b.is_ascii_hexdigit())
+    {
+        return None;
+    }
+    hex::decode(filtered).ok()
+}
+
+fn decode_bytes_value(value: &serde_json::Value) -> Option<Vec<u8>> {
+    match value {
+        serde_json::Value::String(s) => {
+            if let Some(bytes) = decode_pem_crl(s) {
+                return Some(bytes);
+            }
+            if let Some(bytes) = decode_hex_string(s) {
+                return Some(bytes);
+            }
+            decode_base64_string(s)
+        }
+        serde_json::Value::Array(list) => {
+            let mut out = Vec::with_capacity(list.len());
+            for v in list {
+                let b = v.as_u64()?;
+                if b > u8::MAX as u64 {
+                    return None;
+                }
+                out.push(b as u8);
+            }
+            Some(out)
+        }
+        _ => None,
+    }
+}
+
+fn decode_pem_crl(s: &str) -> Option<Vec<u8>> {
+    if !s.contains("BEGIN") {
+        return None;
+    }
+    let blocks = pem::parse_many(s).ok()?;
+    for block in blocks {
+        let tag = block.tag();
+        if tag == "X509 CRL" || tag == "CRL" {
+            return Some(block.contents().to_vec());
+        }
+    }
+    None
+}
+
+fn decode_base64_string(s: &str) -> Option<Vec<u8>> {
+    let filtered: String = s.chars().filter(|c| !c.is_whitespace()).collect();
+    if filtered.is_empty() {
+        return None;
+    }
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(filtered.as_bytes())
+        .ok()?;
+    if bytes.first() != Some(&0x30) {
+        return None;
+    }
+    Some(bytes)
+}
+
+fn decode_crl_bytes(bytes: &[u8]) -> Option<Vec<u8>> {
     let s = core::str::from_utf8(bytes).ok()?;
-    hex::decode(s.trim()).ok()
+    if let Some(decoded) = decode_pem_crl(s) {
+        return Some(decoded);
+    }
+    if let Some(decoded) = decode_hex_string(s) {
+        return Some(decoded);
+    }
+    decode_base64_string(s)
+}
+
+fn normalize_crl_bytes(bytes: &mut Vec<u8>) {
+    if let Some(decoded) = decode_crl_bytes(bytes) {
+        *bytes = decoded;
+    }
+}
+
+fn der_total_len(bytes: &[u8]) -> Option<usize> {
+    if bytes.len() < 2 || bytes[0] != 0x30 {
+        return None;
+    }
+    let len = match bytes[1] {
+        0x81 if bytes.len() >= 3 => bytes[2] as usize,
+        0x82 if bytes.len() >= 4 => ((bytes[2] as usize) << 8) | (bytes[3] as usize),
+        n if n < 0x80 => n as usize,
+        _ => return None,
+    };
+    Some(match bytes[1] {
+        0x81 => 3 + len,
+        0x82 => 4 + len,
+        _ => 2 + len,
+    })
+}
+
+fn looks_like_der_crl(bytes: &[u8]) -> bool {
+    matches!(der_total_len(bytes), Some(total) if total == bytes.len())
+}
+
+fn trim_der_trailing(bytes: &mut Vec<u8>) {
+    if let Some(total) = der_total_len(bytes) {
+        if total <= bytes.len() && total > 0 {
+            bytes.truncate(total);
+        }
+    }
 }
 
 fn extract_root_crl_from_chain(pck_crl_issuer_chain: &str) -> Result<Vec<u8>> {
@@ -192,11 +343,25 @@ fn extract_root_crl_from_chain(pck_crl_issuer_chain: &str) -> Result<Vec<u8>> {
 
 fn fetch_collateral_uncached(endpoints: &PcsEndpoints) -> Result<QuoteCollateralV3> {
     // PCK CRL
-    let (status, pck_crl, headers) = http_get_bytes(&endpoints.url_pckcrl())?;
+    let (status, mut pck_crl, headers) = http_get_bytes(&endpoints.url_pckcrl())?;
     if !(200..300).contains(&status) {
         bail!("Failed to fetch PCK CRL: HTTP {status}");
     }
     let pck_crl_issuer_chain = get_header(&headers, "SGX-PCK-CRL-Issuer-Chain")?;
+    normalize_crl_bytes(&mut pck_crl);
+    if !looks_like_der_crl(&pck_crl) {
+        if let Ok((status, mut pem_crl, _)) = http_get_bytes(&endpoints.url_pckcrl_pem()) {
+            if (200..300).contains(&status) {
+                normalize_crl_bytes(&mut pem_crl);
+                if looks_like_der_crl(&pem_crl) {
+                    pck_crl = pem_crl;
+                }
+            }
+        }
+    }
+    if !looks_like_der_crl(&pck_crl) {
+        trim_der_trailing(&mut pck_crl);
+    }
 
     // TCB info
     let (status, raw_tcb_info, headers) = http_get_bytes(&endpoints.url_tcb())?;
@@ -221,14 +386,19 @@ fn fetch_collateral_uncached(endpoints: &PcsEndpoints) -> Result<QuoteCollateral
     if !endpoints.base_url.starts_with(DEFAULT_PCS_URL) {
         if let Ok((status, bytes, _)) = http_get_bytes(&endpoints.url_rootcacrl()) {
             if (200..300).contains(&status) {
-                root_ca_crl = try_decode_hex_crl(&bytes).or(Some(bytes));
+                let decoded = decode_crl_bytes(&bytes).unwrap_or(bytes);
+                root_ca_crl = Some(decoded);
             }
         }
     }
-    let root_ca_crl = match root_ca_crl {
+    let mut root_ca_crl = match root_ca_crl {
         Some(v) => v,
         None => extract_root_crl_from_chain(&pck_crl_issuer_chain)?,
     };
+    normalize_crl_bytes(&mut root_ca_crl);
+    if !looks_like_der_crl(&root_ca_crl) {
+        trim_der_trailing(&mut root_ca_crl);
+    }
 
     // Parse TCB info and QE identity payloads (extract and hex-decode "signature" field).
     let tcb_info_json: serde_json::Value =
@@ -264,6 +434,7 @@ fn fetch_collateral_uncached(endpoints: &PcsEndpoints) -> Result<QuoteCollateral
         qe_identity_issuer_chain,
         qe_identity,
         qe_identity_signature,
+        pck_certificate_chain: None,
     })
 }
 

@@ -27,6 +27,11 @@ bash evaluation-tests/run_all.sh
 
 Results are written to `evaluation-tests/results`.
 
+for cuurent version:
+```bash
+PCCS_URL="https://sgx-dcap-server.cn-beijing.aliyuncs.com/sgx/certification/v4/" OPENSSL_DIR=/path/to/openssl-wasm/ bash evaluation-tests/run_all.sh
+```
+
 ## Build artifacts only
 
 ```bash

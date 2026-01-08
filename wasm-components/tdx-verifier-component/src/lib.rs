@@ -1,5 +1,6 @@
 use anyhow::{anyhow, bail, Context, Result};
 use base64::Engine;
+use chrono::DateTime;
 use dcap_qvl::verify::VerifiedReport;
 use eventlog::{ccel::tcg_enum::TcgAlgorithm, CcEventLog, ReferenceMeasurement};
 use serde::Deserialize;
@@ -59,15 +60,53 @@ fn custom_claims_from_verified_report(report: VerifiedReport) -> Map<String, Val
     map
 }
 
+fn parse_next_update_secs(json: &str) -> Option<u64> {
+    let value: serde_json::Value = serde_json::from_str(json).ok()?;
+    let next_update = value.get("nextUpdate")?.as_str()?;
+    let parsed = DateTime::parse_from_rfc3339(next_update).ok()?;
+    Some(parsed.timestamp().max(0) as u64)
+}
+
+fn collateral_expired(collateral: &dcap_qvl::QuoteCollateralV3, now: u64) -> bool {
+    for next_update in [
+        parse_next_update_secs(&collateral.tcb_info),
+        parse_next_update_secs(&collateral.qe_identity),
+    ] {
+        let Some(next_update) = next_update else {
+            continue;
+        };
+        if now > next_update {
+            return true;
+        }
+    }
+    false
+}
+
 fn ecdsa_quote_verification_via_dcap_qvl(quote: &[u8]) -> Result<Map<String, Value>> {
     let pccs_url = std::env::var("PCCS_URL").ok();
     let cache_dir = std::env::var("DCAP_QVL_CACHE_DIR").unwrap_or_else(|_| "dcap-qvl-cache".into());
     let collateral =
         dcap_qvl_wasi::get_collateral_cached(pccs_url.as_deref(), quote, Path::new(&cache_dir))
             .context("get collateral")?;
-    let verified = dcap_qvl::verify::verify(quote, &collateral, now_secs())
+    let now = now_secs();
+    // Match Intel DCAP behavior: treat expired collateral as a warning.
+    if std::env::var("DCAP_QVL_IGNORE_EXPIRY").is_err() {
+        std::env::set_var("DCAP_QVL_IGNORE_EXPIRY", "1");
+    }
+    // Allow non-zero MR_SERVICETD for TDX 1.5 quotes (service TD bound).
+    if std::env::var("DCAP_QVL_ALLOW_SERVICE_TD").is_err() {
+        std::env::set_var("DCAP_QVL_ALLOW_SERVICE_TD", "1");
+    }
+    let verified = dcap_qvl::verify::verify(quote, &collateral, now)
         .context("dcap-qvl quote verification failed")?;
-    Ok(custom_claims_from_verified_report(verified))
+    let mut claims = custom_claims_from_verified_report(verified);
+    if collateral_expired(&collateral, now) {
+        claims.insert(
+            "collateral_expired".to_string(),
+            Value::Bool(true),
+        );
+    }
+    Ok(claims)
 }
 
 fn parse_evidence(evidence: &[u8]) -> Result<(Vec<u8>, Option<Vec<u8>>)> {

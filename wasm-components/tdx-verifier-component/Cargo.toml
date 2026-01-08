@@ -16,7 +16,8 @@ anyhow.workspace = true
 base64.workspace = true
 bitflags = "2.10.0"
 byteorder.workspace = true
-dcap-qvl = { version = "0.3.4", default-features = false, features = ["std"] }
+chrono.workspace = true
+dcap-qvl = { version = "0.3.6", default-features = false, features = ["std"] }
 dcap-qvl-wasi = { path = "../dcap-qvl-wasi", features = ["wasi-http"] }
 eventlog = { path = "../../deps/eventlog" }
 hex.workspace = true
