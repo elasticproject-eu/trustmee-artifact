@@ -1,0 +1,31 @@
+[package]
+name = "snp-verifier-component"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+test = false
+doctest = false
+
+[package.metadata.component]
+package = "trustee:verifier"
+
+[dependencies]
+anyhow.workspace = true
+asn1-rs = "0.7.1"
+base64.workspace = true
+hex.workspace = true
+openssl.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sev = { git = "https://github.com/virtee/sev", rev = "d487809188c3c92e397bc92e2cb2a85eb982c980", default-features = false, features = [
+    "openssl",
+    "snp",
+    "serde",
+] }
+strum.workspace = true
+tracing.workspace = true
+waki = "0.5.1"
+wit-bindgen = "0.46.0"
+x509-parser = "0.18.0"

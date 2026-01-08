@@ -12,7 +12,9 @@ members = [
     "deps/policy-engine",
     "wasm-components/dcap-qvl-wasi",
     "wasm-components/tdx-verifier-component",
-    "wasm-components/tdx-verifier-test"
+    "wasm-components/tdx-verifier-test",
+    "wasm-components/snp-verifier-component",
+    "wasm-components/snp-verifier-test"
 ]
 resolver = "2"
 
