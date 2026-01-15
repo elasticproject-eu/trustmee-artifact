@@ -90,4 +90,4 @@ def default_tdx_quote_path() -> str:
 
 
 def default_snp_report_path() -> str:
-    return str(repo_root() / "snp_report.bin")
+    return str(repo_root() / "snp_report_v3_real.bin")

@@ -3,7 +3,7 @@ use std::{env, fs, path::PathBuf};
 fn main() {
     let target = env::var("TARGET").unwrap_or_default();
 
-    if target == "wasm32-wasip1" {
+    if target == "wasm32-wasip2" {
         if let Some(lib_dir) = find_wasi_sysroot_libdir(&target) {
             println!("cargo:rustc-link-search=native={}", lib_dir.display());
         } else {

@@ -20,13 +20,17 @@ wasmtime::component::bindgen!({
 #[derive(Parser, Debug)]
 #[command(name = "snp-verifier-test")]
 struct Args {
-    /// Path to the Wasm component (`.wasm`) built by `cargo component build`.
+    /// Path to the Wasm component (`.wasm`) built by `cargo build --target wasm32-wasip2 --release`.
     #[arg(long)]
     component: PathBuf,
 
+    /// Path to SNP evidence JSON (attestation_report + optional cert_chain).
+    #[arg(long, conflicts_with_all = ["report", "vcek", "vlek"])]
+    evidence_json: Option<PathBuf>,
+
     /// Path to an SNP attestation report (raw bytes).
-    #[arg(long)]
-    report: PathBuf,
+    #[arg(long, required_unless_present = "evidence_json", conflicts_with = "evidence_json")]
+    report: Option<PathBuf>,
 
     /// Optional path to a VCEK certificate (DER bytes).
     #[arg(long)]
@@ -67,34 +71,44 @@ fn main() -> Result<()> {
         bail!("use only one of --vcek or --vlek");
     }
 
-    let report_bytes =
-        std::fs::read(&args.report).with_context(|| format!("read {}", args.report.display()))?;
-    let attestation_report = AttestationReport::from_bytes(&report_bytes)
-        .context("parse SNP attestation report")?;
+    let evidence_bytes = if let Some(path) = args.evidence_json.as_ref() {
+        std::fs::read(path).with_context(|| format!("read {}", path.display()))?
+    } else {
+        let report_path = args
+            .report
+            .as_ref()
+            .ok_or_else(|| anyhow!("--report is required unless --evidence-json is used"))?;
+        let report_bytes = std::fs::read(report_path)
+            .with_context(|| format!("read {}", report_path.display()))?;
+        let attestation_report = AttestationReport::from_bytes(&report_bytes)
+            .context("parse SNP attestation report")?;
 
-    let cert_chain = match (args.vcek.as_ref(), args.vlek.as_ref()) {
-        (Some(path), None) => {
-            let vcek = std::fs::read(path).with_context(|| format!("read {}", path.display()))?;
-            Some(vec![CertTableEntry {
-                cert_type: CertType::VCEK,
-                data: vcek,
-            }])
-        }
-        (None, Some(path)) => {
-            let vlek = std::fs::read(path).with_context(|| format!("read {}", path.display()))?;
-            Some(vec![CertTableEntry {
-                cert_type: CertType::VLEK,
-                data: vlek,
-            }])
-        }
-        _ => None,
-    };
+        let cert_chain = match (args.vcek.as_ref(), args.vlek.as_ref()) {
+            (Some(path), None) => {
+                let vcek =
+                    std::fs::read(path).with_context(|| format!("read {}", path.display()))?;
+                Some(vec![CertTableEntry {
+                    cert_type: CertType::VCEK,
+                    data: vcek,
+                }])
+            }
+            (None, Some(path)) => {
+                let vlek =
+                    std::fs::read(path).with_context(|| format!("read {}", path.display()))?;
+                Some(vec![CertTableEntry {
+                    cert_type: CertType::VLEK,
+                    data: vlek,
+                }])
+            }
+            _ => None,
+        };
 
-    let evidence = SnpEvidence {
-        attestation_report,
-        cert_chain,
+        let evidence = SnpEvidence {
+            attestation_report,
+            cert_chain,
+        };
+        serde_json::to_vec(&evidence).context("serialize evidence JSON")?
     };
-    let evidence_bytes = serde_json::to_vec(&evidence).context("serialize evidence JSON")?;
 
     let expected_report_data = match args.expected_report_data_hex.as_deref() {
         Some(s) => exports::trustee::verifier::verifier_interface::OptionalData::Value(decode_hex(s)?),

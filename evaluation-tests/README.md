@@ -9,8 +9,7 @@ This folder reproduces the performance tests. The scripts target:
 ## Prerequisites
 
 - Rust toolchain (`cargo`, `rustup`)
-- `cargo component` for Wasm component builds
-- `wasm32-wasip1` target installed (`rustup target add wasm32-wasip1`)
+- `wasm32-wasip2` target installed (`rustup target add wasm32-wasip2`)
 - Intel DCAP libs for native TDX verification (e.g., `libsgx-dcap-quote-verify-dev`)
 - Network access:
   - AMD KDS for SNP no-cert test
@@ -27,9 +26,9 @@ bash evaluation-tests/run_all.sh
 
 Results are written to `evaluation-tests/results`.
 
-for cuurent version:
+for current version:
 ```bash
-PCCS_URL="https://sgx-dcap-server.cn-beijing.aliyuncs.com/sgx/certification/v4/" OPENSSL_DIR=/path/to/openssl-wasm/ bash evaluation-tests/run_all.sh
+PCCS_URL="https://sgx-dcap-server.cn-beijing.aliyuncs.com/sgx/certification/v4/" OPENSSL_DIR=/path/to/openssl-wasm/ NATIVE_OPENSSL_DIR=/path/to/openssl-native/ bash evaluation-tests/run_all.sh
 ```
 
 ## Build artifacts only
@@ -88,7 +87,7 @@ Register a component and run TDX latency:
 ```bash
 COMPONENT_ID="$(python3 evaluation-tests/bin/register_component.py \
   --url http://127.0.0.1:18080/component \
-  --component target/wasm32-wasip1/release/tdx_verifier_component.wasm)"
+  --component target/wasm32-wasip2/release/tdx_verifier_component.wasm)"
 
 python3 evaluation-tests/bin/eval_latency.py \
   --url http://127.0.0.1:18080/attestation \

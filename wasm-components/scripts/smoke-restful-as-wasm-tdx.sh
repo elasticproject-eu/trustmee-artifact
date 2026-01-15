@@ -8,13 +8,13 @@ PORT="${PORT:-18080}"
 WORK_DIR="${WORK_DIR:-/tmp/as-wasm-work}"
 CFG_PATH="${CFG_PATH:-/tmp/as-wasm.json}"
 
-COMPONENT_PATH="${COMPONENT_PATH:-target/wasm32-wasip1/release/tdx_verifier_component.wasm}"
+COMPONENT_PATH="${COMPONENT_PATH:-target/wasm32-wasip2/release/tdx_verifier_component.wasm}"
 QUOTE_PATH="${QUOTE_PATH:-tdx_quote.bin}"
 BAD_QUOTE_PATH="${BAD_QUOTE_PATH:-tdx_quote_tampered.bin}"
 
 if [[ ! -f "$COMPONENT_PATH" ]]; then
   echo "component not found: $COMPONENT_PATH" >&2
-  echo "hint: build it with: cargo build -p tdx-verifier-component --target wasm32-wasip1 --release" >&2
+  echo "hint: build it with: cargo build -p tdx-verifier-component --target wasm32-wasip2 --release" >&2
   exit 2
 fi
 

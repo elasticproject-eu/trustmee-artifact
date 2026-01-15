@@ -13,7 +13,7 @@ wasmtime::component::bindgen!({
 #[derive(Parser, Debug)]
 #[command(name = "tdx-verifier-test")]
 struct Args {
-    /// Path to the Wasm component (`.wasm`) built by `cargo component build`.
+    /// Path to the Wasm component (`.wasm`) built by `cargo build --target wasm32-wasip2 --release`.
     #[arg(long)]
     component: PathBuf,
 

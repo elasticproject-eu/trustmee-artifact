@@ -7,21 +7,21 @@ This directory contains standalone WebAssembly components used by this project.
 
 ## Build the component
 
-From the repo root:
+From the repo root (no `cargo component` required; uses the native `wasm32-wasip2` target):
 
-`cargo component build -p tdx-verifier-component --release --target wasm32-wasip1`
+`cargo build -p tdx-verifier-component --release --target wasm32-wasip2`
 
-The resulting component is created at `target/wasm32-wasip1/release/tdx_verifier_component.wasm`.
+The resulting component is created at `target/wasm32-wasip2/release/tdx_verifier_component.wasm`.
 
-For AMD SEV-SNP, the verifier depends on OpenSSL (Used https://github.com/jedisct1/openssl-wasm). Build OpenSSL for `wasm32-wasip1` and point `OPENSSL_DIR` to it, and enable SIMD128:
+For AMD SEV-SNP, the verifier depends on OpenSSL (Used https://github.com/jedisct1/openssl-wasm). Build OpenSSL for `wasm32-wasip2` and point `OPENSSL_DIR` to it, and enable SIMD128:
 
-`RUSTFLAGS='-C target-feature=+simd128' OPENSSL_DIR=/path/to/wasm-openssl cargo component build -p snp-verifier-component --release --target wasm32-wasip1`
+`RUSTFLAGS='-C target-feature=+simd128' OPENSSL_DIR=/path/to/wasm-openssl cargo build -p snp-verifier-component --release --target wasm32-wasip2`
 
-The resulting component is created at `target/wasm32-wasip1/release/snp_verifier_component.wasm`.
+The resulting component is created at `target/wasm32-wasip2/release/snp_verifier_component.wasm`.
 
 ## Run the verifier (host-side)
 
-`cargo run -p tdx-verifier-test -- --component target/wasm32-wasip1/release/tdx_verifier_component.wasm --quote /path/to/tdx-quote.bin`
+`cargo run -p tdx-verifier-test -- --component target/wasm32-wasip2/release/tdx_verifier_component.wasm --quote /path/to/tdx-quote.bin`
 
 Optional inputs:
 
@@ -35,7 +35,7 @@ On verification failure, the component returns JSON like `{"status":"failed","er
 
 For AMD SEV-SNP:
 
-`env -u OPENSSL_NO_PKG_CONFIG CFLAGS= CXXFLAGS= cargo run -p snp-verifier-test -- --component target/wasm32-wasip1/release/snp_verifier_component.wasm --report snp_report.bin --vcek sev_snp_quote_and_certs/vcek.der`
+`env -u OPENSSL_NO_PKG_CONFIG CFLAGS= CXXFLAGS= cargo run -p snp-verifier-test -- --component target/wasm32-wasip2/release/snp_verifier_component.wasm --report snp_report.bin --vcek sev_snp_quote_and_certs/vcek.der`
 
 Optional inputs:
 

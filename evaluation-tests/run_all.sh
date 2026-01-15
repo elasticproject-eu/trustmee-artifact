@@ -9,6 +9,16 @@ PORT="${PORT:-18080}"
 AS_URL="http://127.0.0.1:${PORT}/attestation"
 COMPONENT_URL="http://127.0.0.1:${PORT}/component"
 
+if [[ -n "${NATIVE_OPENSSL_DIR:-}" ]]; then
+  OPENSSL_LIB_DIR="$NATIVE_OPENSSL_DIR/lib64"
+  if [[ ! -d "$OPENSSL_LIB_DIR" ]]; then
+    OPENSSL_LIB_DIR="$NATIVE_OPENSSL_DIR/lib"
+  fi
+  if [[ -d "$OPENSSL_LIB_DIR" ]]; then
+    export LD_LIBRARY_PATH="$OPENSSL_LIB_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  fi
+fi
+
 mkdir -p "$RESULTS_DIR" "$TMP_DIR"
 
 run_latency() {
@@ -92,7 +102,7 @@ PID="$(cat "$TMP_DIR/restful-as-wasm.pid")"
 SNP_COMPONENT_ID="$(
   python3 "$BIN_DIR/register_component.py" \
     --url "$COMPONENT_URL" \
-    --component "$ROOT_DIR/target/wasm32-wasip1/release/snp_verifier_component.wasm"
+    --component "$ROOT_DIR/target/wasm32-wasip2/release/snp_verifier_component.wasm"
 )"
 run_latency snp wasm "$RESULTS_DIR/snp_wasm_latency.json" --component-id "$SNP_COMPONENT_ID"
 parse_verifier_timing "$WASM_LOG" "Snp" "wasm" "$RESULTS_DIR/snp_wasm_verifier_time.json"
@@ -120,13 +130,12 @@ PID="$(cat "$TMP_DIR/restful-as-wasm.pid")"
 TDX_COMPONENT_ID="$(
   python3 "$BIN_DIR/register_component.py" \
     --url "$COMPONENT_URL" \
-    --component "$ROOT_DIR/target/wasm32-wasip1/release/tdx_verifier_component.wasm"
+    --component "$ROOT_DIR/target/wasm32-wasip2/release/tdx_verifier_component.wasm"
 )"
 run_latency tdx wasm "$RESULTS_DIR/tdx_wasm_latency.json" --component-id "$TDX_COMPONENT_ID" \
   --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
 parse_verifier_timing "$WASM_LOG" "Tdx" "wasm" "$RESULTS_DIR/tdx_wasm_verifier_time.json"
 run_resources tdx "$PID" "$RESULTS_DIR/tdx_wasm_resources.json" --component-id "$TDX_COMPONENT_ID"
-
 "$BIN_DIR/stop_restful_as.sh" wasm
 
 echo "results written to: $RESULTS_DIR"
