@@ -1,3 +1,0 @@
-[submodule "deps/dcap-qvl"]
-	path = deps/dcap-qvl
-	url = git@version.aalto.fi:platsec/attestation/dcap-qvl.git
