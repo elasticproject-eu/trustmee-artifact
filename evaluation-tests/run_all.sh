@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_DIR="$ROOT_DIR/evaluation-tests/bin"
 RESULTS_DIR="${RESULTS_DIR:-$ROOT_DIR/evaluation-tests/results}"
+ATTESTATION_LOG_DIR="${ATTESTATION_LOG_DIR:-$ROOT_DIR/evaluation-tests/attestation-results}"
 TMP_DIR="${TMP_DIR:-$ROOT_DIR/evaluation-tests/tmp}"
 PORT="${PORT:-18080}"
 AS_URL="http://127.0.0.1:${PORT}/attestation"
@@ -19,13 +20,15 @@ if [[ -n "${NATIVE_OPENSSL_DIR:-}" ]]; then
   fi
 fi
 
-mkdir -p "$RESULTS_DIR" "$TMP_DIR"
+mkdir -p "$RESULTS_DIR" "$ATTESTATION_LOG_DIR" "$TMP_DIR"
 
 run_latency() {
   local tee="$1"
   local mode="$2"
   local out="$3"
   shift 3
+  local base="${out##*/}"
+  local result_log="$ATTESTATION_LOG_DIR/${base%.json}_attestation.jsonl"
   local dump_arg=()
   if [[ -n "${DUMP_REQUEST:-}" ]]; then
     dump_arg=(--dump-request "$DUMP_REQUEST")
@@ -35,6 +38,7 @@ run_latency() {
     --tee "$tee" \
     --runs 100 \
     --output "$out" \
+    --result-log "$result_log" \
     "${dump_arg[@]}" \
     "$@"
 }
@@ -139,3 +143,4 @@ run_resources tdx "$PID" "$RESULTS_DIR/tdx_wasm_resources.json" --component-id "
 "$BIN_DIR/stop_restful_as.sh" wasm
 
 echo "results written to: $RESULTS_DIR"
+echo "attestation logs written to: $ATTESTATION_LOG_DIR"
