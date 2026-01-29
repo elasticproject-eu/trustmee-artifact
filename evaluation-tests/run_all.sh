@@ -11,6 +11,8 @@ TMP_DIR="${TMP_DIR:-$ROOT_DIR/evaluation-tests/tmp}"
 PORT="${PORT:-18080}"
 AS_URL="http://127.0.0.1:${PORT}/attestation"
 COMPONENT_URL="http://127.0.0.1:${PORT}/component"
+WASM_WORK_DIR="${WASM_WORK_DIR:-/tmp/as-eval-wasm}"
+WASM_CACHE_DIR="${WASM_CACHE_DIR:-$WASM_WORK_DIR/wasm-cache}"
 
 if [[ -n "${NATIVE_OPENSSL_DIR:-}" ]]; then
   OPENSSL_LIB_DIR="$NATIVE_OPENSSL_DIR/lib64"
@@ -154,7 +156,7 @@ run_resources snp "$PID" "$RESULTS_DIR/snp_native_resources.json"
 
 echo "== SNP wasm =="
 SNP_STEP_TIMING_JSON=1 SNP_TIMING_MODE=wasm AS_VERIFICATION_TIMING_JSON=1 \
-  PORT="$PORT" TMP_DIR="$TMP_DIR" "$BIN_DIR/start_restful_as.sh" wasm
+  PORT="$PORT" TMP_DIR="$TMP_DIR" WORK_DIR="$WASM_WORK_DIR" "$BIN_DIR/start_restful_as.sh" wasm
 WASM_LOG="$TMP_DIR/restful-as-wasm.log"
 PID="$(cat "$TMP_DIR/restful-as-wasm.pid")"
 SNP_COMPONENT_ID="$(
@@ -183,7 +185,8 @@ run_resources tdx "$PID" "$RESULTS_DIR/tdx_native_resources.json"
 "$BIN_DIR/stop_restful_as.sh" native
 
 echo "== TDX wasm =="
-AS_VERIFICATION_TIMING_JSON=1 PORT="$PORT" TMP_DIR="$TMP_DIR" "$BIN_DIR/start_restful_as.sh" wasm
+AS_VERIFICATION_TIMING_JSON=1 PORT="$PORT" TMP_DIR="$TMP_DIR" WORK_DIR="$WASM_WORK_DIR" \
+  "$BIN_DIR/start_restful_as.sh" wasm
 WASM_LOG="$TMP_DIR/restful-as-wasm.log"
 PID="$(cat "$TMP_DIR/restful-as-wasm.pid")"
 TDX_COMPONENT_ID="$(
@@ -197,6 +200,16 @@ parse_verifier_timing "$WASM_LOG" "Tdx" "wasm" "$RESULTS_DIR/tdx_wasm_verifier_t
 parse_collateral_timing "$WASM_LOG" "Tdx" "wasm" "$RESULTS_DIR/tdx_wasm_collateral_time.json"
 run_resources tdx "$PID" "$RESULTS_DIR/tdx_wasm_resources.json" --component-id "$TDX_COMPONENT_ID"
 "$BIN_DIR/stop_restful_as.sh" wasm
+
+echo "== TDX native (dcap-qvl for fig26) =="
+AS_VERIFICATION_TIMING_JSON=1 TDX_NATIVE_USE_DCAP_QVL=1 DCAP_QVL_CACHE_DIR="$WASM_CACHE_DIR" \
+  PORT="$PORT" TMP_DIR="$TMP_DIR" "$BIN_DIR/start_restful_as.sh" native
+NATIVE_LOG="$TMP_DIR/restful-as-native.log"
+PID="$(cat "$TMP_DIR/restful-as-native.pid")"
+run_latency tdx native "$RESULTS_DIR/tdx_native_latency_dcap_qvl.json" \
+  --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
+parse_verifier_timing "$NATIVE_LOG" "Tdx" "native" "$RESULTS_DIR/tdx_native_verifier_time_dcap_qvl.json"
+"$BIN_DIR/stop_restful_as.sh" native
 
 echo "== generate figures =="
 python3 "$BIN_DIR/plot_figures.py" --results-dir "$RESULTS_DIR" --preset evaluation-all

@@ -15,6 +15,7 @@ use std::time::Instant;
 
 pub(crate) mod claims;
 pub(crate) mod quote;
+mod dcap_qvl;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct TdxEvidence {
@@ -73,8 +74,11 @@ async fn verify_evidence(
 
     // Verify TD quote ECDSA signature.
     let quote_bin = base64::engine::general_purpose::STANDARD.decode(evidence.quote)?;
-    let (custom_claims, collateral_ms) =
-        ecdsa_quote_verification_with_timing(quote_bin.as_slice()).await?;
+    let (custom_claims, collateral_ms) = if env_flag("TDX_NATIVE_USE_DCAP_QVL") {
+        dcap_qvl::ecdsa_quote_verification_with_timing(quote_bin.as_slice()).await?
+    } else {
+        ecdsa_quote_verification_with_timing(quote_bin.as_slice()).await?
+    };
     if timing_enabled {
         eprintln!(
             "{{\"event\":\"as_tdx_collateral_timing\",\"tee\":\"Tdx\",\"mode\":\"native\",\"ms\":{ms:.3}}}",

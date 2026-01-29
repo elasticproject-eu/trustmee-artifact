@@ -740,13 +740,19 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
             )
             out_path = output_dir / f"fig25_tdx_latency_verification.{args.format}"
         elif fig_number == 26:
+            native_path = results_dir / "tdx_native_verifier_time_dcap_qvl.json"
+            if not native_path.is_file():
+                native_path = results_dir / "tdx_native_verifier_time.json"
             needed = [
-                results_dir / "tdx_native_verifier_time.json",
+                native_path,
                 results_dir / "tdx_wasm_verifier_time.json",
             ]
             if not ensure_files(needed, args.strict, fig_number):
                 continue
-            mean, std = load_verifier_pair(results_dir, "tdx")
+            native = load_verifier_time(native_path)
+            wasm = load_verifier_time(results_dir / "tdx_wasm_verifier_time.json")
+            mean = np.array([native[0], wasm[0]], dtype=float)
+            std = np.array([native[1], wasm[1]], dtype=float)
             fig = build_single_latency(
                 "Verification latency of an Intel TDX remote attestation request",
                 mean,
