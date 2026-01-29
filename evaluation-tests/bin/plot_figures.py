@@ -21,6 +21,7 @@ except ImportError as exc:
 
 DEFAULT_FIGWIDTH = 3.35
 DEFAULT_EVAL_WIDE = 6.8
+NUMERIC_LABEL_DELTA = 1
 
 
 @dataclass(frozen=True)
@@ -212,12 +213,15 @@ def bar_compare(
     ax.set_ylim(0, axis_max)
     ax.grid(axis="y", linestyle="--", linewidth=1.0, alpha=0.6)
     ax.set_axisbelow(True)
+    if show_values:
+        # Add a bit of horizontal padding so edge labels don't touch the border.
+        ax.margins(x=0.12)
 
     if show_values:
         offset = axis_max * pad_ratio * (0.7 if value_layout == "stacked" else 1.0)
         offset = max(offset, axis_max * 0.01)
         label_fs = max(
-            plt.rcParams["font.size"] - (2.2 if value_layout == "stacked" else 1.5),
+            plt.rcParams["font.size"] - (2.2 if value_layout == "stacked" else 1.5) + NUMERIC_LABEL_DELTA,
             6.5,
         )
         for xi, m, s in zip(x, mean, std):
@@ -231,7 +235,6 @@ def bar_compare(
                 va="bottom",
                 fontsize=label_fs,
             )
-
 
 def build_latency_pair_twopanel(
     platform_label: str,
@@ -440,6 +443,7 @@ def build_dumbbell_onecol(
     ax.set_title(f"{platform} latency (mean +/- std)", pad=10)
 
     if show_values:
+        value_fs = max(plt.rcParams["font.size"] - 1.0 + NUMERIC_LABEL_DELTA, 9.2)
         for i in range(len(metrics)):
             yi = y[i]
             if yi == y.max():
@@ -447,31 +451,30 @@ def build_dumbbell_onecol(
                     format_value(native_mean[i], native_std[i]),
                     (native_mean[i], yi),
                     xytext=(6, -10), textcoords="offset points",
-                    ha="left", va="top", fontsize=9.2,
+                    ha="left", va="top", fontsize=value_fs,
                 )
                 ax.annotate(
                     format_value(wasm_mean[i], wasm_std[i]),
                     (wasm_mean[i], yi),
                     xytext=(-6, 8), textcoords="offset points",
-                    ha="right", va="bottom", fontsize=9.2,
+                    ha="right", va="bottom", fontsize=value_fs,
                 )
             else:
                 ax.annotate(
                     format_value(native_mean[i], native_std[i]),
                     (native_mean[i], yi),
                     xytext=(6, 8), textcoords="offset points",
-                    ha="left", va="bottom", fontsize=9.2,
+                    ha="left", va="bottom", fontsize=value_fs,
                 )
                 ax.annotate(
                     format_value(wasm_mean[i], wasm_std[i]),
                     (wasm_mean[i], yi),
                     xytext=(-6, -10), textcoords="offset points",
-                    ha="right", va="top", fontsize=9.2,
+                    ha="right", va="top", fontsize=value_fs,
                 )
 
     ax.legend(frameon=False, loc="upper center", bbox_to_anchor=(0.5, -0.42),
               ncol=2, columnspacing=1.2, handletextpad=0.6)
-
     return fig
 
 
@@ -551,8 +554,8 @@ def build_bars_breakdown_onecol(
 
     if show_values:
         base = plt.rcParams["font.size"]
-        fs_total = max(base - 1.8, 7.0)
-        fs_ver = max(base - 2.8, 6.4)
+        fs_total = max(base - 1.8 + NUMERIC_LABEL_DELTA, 7.0)
+        fs_ver = max(base - 2.8 + NUMERIC_LABEL_DELTA, 6.4)
 
         for i, xi in enumerate(x):
             total_label_y = e2e_mean[i]
@@ -596,7 +599,6 @@ def build_bars_breakdown_onecol(
         loc="upper center", bbox_to_anchor=(0.5, -0.23),
         ncol=2, columnspacing=1.2, handletextpad=0.6,
     )
-
     return fig
 
 

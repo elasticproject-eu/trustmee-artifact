@@ -73,6 +73,12 @@ fn now_secs() -> Result<u64> {
         .as_secs())
 }
 
+fn cache_disabled() -> bool {
+    std::env::var("DCAP_QVL_DISABLE_CACHE")
+        .map(|v| matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
+}
+
 fn read_cache(cache_path: &Path) -> Option<QuoteCollateralV3> {
     let data = fs::read(cache_path).ok()?;
     let value: serde_json::Value = serde_json::from_slice(&data).ok()?;
@@ -447,6 +453,9 @@ pub fn get_collateral_cached(pccs_url: Option<&str>, quote: &[u8], cache_dir: &P
     let for_sgx = quote_obj.header.is_sgx();
 
     let endpoints = PcsEndpoints::new(pccs_url, for_sgx, fmspc.clone(), ca);
+    if cache_disabled() {
+        return fetch_collateral_uncached(&endpoints);
+    }
     let key = cache_key(&endpoints.base_url, endpoints.tee, &fmspc, ca);
     let cache_path: PathBuf = cache_dir.join(key);
 

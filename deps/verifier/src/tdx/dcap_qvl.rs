@@ -15,6 +15,12 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
+fn cache_disabled() -> bool {
+    std::env::var("DCAP_QVL_DISABLE_CACHE")
+        .map(|v| matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
+}
+
 fn cache_key(base_url: &str, tee: &str, fmspc: &str, ca: &str) -> String {
     let mut h = Sha256::new();
     h.update(base_url.as_bytes());
@@ -71,6 +77,9 @@ async fn get_collateral_cached(
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
         .unwrap_or(DEFAULT_PCS_URL);
+    if cache_disabled() {
+        return ::dcap_qvl::collateral::get_collateral(pccs_url, quote).await;
+    }
 
     let quote_obj = ::dcap_qvl::quote::Quote::parse(quote).context("parse quote")?;
     let ca = quote_obj.ca().context("get CA")?;

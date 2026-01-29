@@ -174,7 +174,8 @@ run_resources snp "$PID" "$RESULTS_DIR/snp_wasm_resources.json" --component-id "
 "$BIN_DIR/stop_restful_as.sh" wasm
 
 echo "== TDX native =="
-AS_VERIFICATION_TIMING_JSON=1 PORT="$PORT" TMP_DIR="$TMP_DIR" "$BIN_DIR/start_restful_as.sh" native
+AS_VERIFICATION_TIMING_JSON=1 DCAP_QVL_DISABLE_CACHE=1 PORT="$PORT" TMP_DIR="$TMP_DIR" \
+  "$BIN_DIR/start_restful_as.sh" native
 NATIVE_LOG="$TMP_DIR/restful-as-native.log"
 PID="$(cat "$TMP_DIR/restful-as-native.pid")"
 run_latency tdx native "$RESULTS_DIR/tdx_native_latency.json" \
@@ -185,8 +186,8 @@ run_resources tdx "$PID" "$RESULTS_DIR/tdx_native_resources.json"
 "$BIN_DIR/stop_restful_as.sh" native
 
 echo "== TDX wasm =="
-AS_VERIFICATION_TIMING_JSON=1 PORT="$PORT" TMP_DIR="$TMP_DIR" WORK_DIR="$WASM_WORK_DIR" \
-  "$BIN_DIR/start_restful_as.sh" wasm
+AS_VERIFICATION_TIMING_JSON=1 DCAP_QVL_DISABLE_CACHE=1 PORT="$PORT" TMP_DIR="$TMP_DIR" \
+  WORK_DIR="$WASM_WORK_DIR" "$BIN_DIR/start_restful_as.sh" wasm
 WASM_LOG="$TMP_DIR/restful-as-wasm.log"
 PID="$(cat "$TMP_DIR/restful-as-wasm.pid")"
 TDX_COMPONENT_ID="$(
