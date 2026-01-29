@@ -96,6 +96,20 @@ parse_verifier_timing() {
     --output "$out"
 }
 
+parse_collateral_timing() {
+  local log_path="$1"
+  local tee="$2"
+  local mode="$3"
+  local out="$4"
+  python3 "$BIN_DIR/parse_timings.py" \
+    --log "$log_path" \
+    --event as_tdx_collateral_timing \
+    --tee "$tee" \
+    --mode "$mode" \
+    --fields ms \
+    --output "$out"
+}
+
 parse_snp_steps() {
   local log_path="$1"
   local mode="$2"
@@ -164,6 +178,7 @@ PID="$(cat "$TMP_DIR/restful-as-native.pid")"
 run_latency tdx native "$RESULTS_DIR/tdx_native_latency.json" \
   --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
 parse_verifier_timing "$NATIVE_LOG" "Tdx" "native" "$RESULTS_DIR/tdx_native_verifier_time.json"
+parse_collateral_timing "$NATIVE_LOG" "Tdx" "native" "$RESULTS_DIR/tdx_native_collateral_time.json"
 run_resources tdx "$PID" "$RESULTS_DIR/tdx_native_resources.json"
 "$BIN_DIR/stop_restful_as.sh" native
 
@@ -179,6 +194,7 @@ TDX_COMPONENT_ID="$(
 run_latency tdx wasm "$RESULTS_DIR/tdx_wasm_latency.json" --component-id "$TDX_COMPONENT_ID" \
   --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
 parse_verifier_timing "$WASM_LOG" "Tdx" "wasm" "$RESULTS_DIR/tdx_wasm_verifier_time.json"
+parse_collateral_timing "$WASM_LOG" "Tdx" "wasm" "$RESULTS_DIR/tdx_wasm_collateral_time.json"
 run_resources tdx "$PID" "$RESULTS_DIR/tdx_wasm_resources.json" --component-id "$TDX_COMPONENT_ID"
 "$BIN_DIR/stop_restful_as.sh" wasm
 

@@ -226,6 +226,8 @@ impl AttestationService {
 
         for verification_request in verification_requests {
             let tee_label = format!("{:?}", verification_request.tee);
+            let log_as_verifier_timing =
+                timing_enabled && verification_request.tee != Tee::Tdx;
             let (report_data, runtime_data_claims) = parse_runtime_data(
                 verification_request.runtime_data,
                 &verification_request.runtime_data_hash_algorithm,
@@ -276,7 +278,7 @@ impl AttestationService {
                     )
                     .await
                     .context("wasm verifier evaluate")?;
-                if timing_enabled {
+                if log_as_verifier_timing {
                     let ms = verify_start.elapsed().as_secs_f64() * 1000.0;
                     eprintln!(
                         "{{\"event\":\"as_verifier_timing\",\"tee\":\"{tee}\",\"mode\":\"wasm\",\"ms\":{ms:.3}}}",
@@ -296,7 +298,7 @@ impl AttestationService {
                     .evaluate(verification_request.evidence, &report_data, &init_data_hash)
                     .await
                     .map_err(|e| anyhow!("Verifier evaluate failed: {e:?}"))?;
-                if timing_enabled {
+                if log_as_verifier_timing {
                     let ms = verify_start.elapsed().as_secs_f64() * 1000.0;
                     eprintln!(
                         "{{\"event\":\"as_verifier_timing\",\"tee\":\"{tee}\",\"mode\":\"native\",\"ms\":{ms:.3}}}",

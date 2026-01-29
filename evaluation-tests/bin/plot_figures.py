@@ -239,14 +239,19 @@ def build_latency_pair_twopanel(
     fig_w: float,
     fig_h: float,
     show_values: bool,
+    shared_axis_max: bool = True,
 ) -> plt.Figure:
     labels = ["native\nTrustee AS", "Wasm-based\nAS"]
     colors = ["#81c784", "#63b5f6"]
 
-    axis_max = nice_limit(float(max(
-        np.max(series.e2e_mean + series.e2e_std),
-        np.max(series.ver_mean + series.ver_std),
-    )))
+    if shared_axis_max:
+        axis_max_e2e = axis_max_ver = nice_limit(float(max(
+            np.max(series.e2e_mean + series.e2e_std),
+            np.max(series.ver_mean + series.ver_std),
+        )))
+    else:
+        axis_max_e2e = nice_limit(float(np.max(series.e2e_mean + series.e2e_std)))
+        axis_max_ver = nice_limit(float(np.max(series.ver_mean + series.ver_std)))
 
     fig, axes = plt.subplots(ncols=2, figsize=(fig_w, fig_h), dpi=300)
     fig.subplots_adjust(left=0.10, right=0.98, top=0.86, bottom=0.22, wspace=0.38)
@@ -260,7 +265,7 @@ def build_latency_pair_twopanel(
         "Time (ms)",
         f"(a) {platform_label}\nEnd-to-End Attestation Latency (mean +/- std)",
         show_values,
-        axis_max=axis_max,
+        axis_max=axis_max_e2e,
     )
     bar_compare(
         axes[1],
@@ -271,7 +276,7 @@ def build_latency_pair_twopanel(
         "Time (ms)",
         f"(b) {platform_label}\nVerification Time (mean +/- std)",
         show_values,
-        axis_max=axis_max,
+        axis_max=axis_max_ver,
     )
     return fig
 
@@ -730,7 +735,9 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
             if not ensure_files(needed, args.strict, fig_number):
                 continue
             series = load_platform(results_dir, "tdx")
-            fig = build_latency_pair_twopanel("Intel TDX", series, fig_w, fig_h, show_values)
+            fig = build_latency_pair_twopanel(
+                "Intel TDX", series, fig_w, fig_h, show_values, shared_axis_max=False
+            )
             out_path = output_dir / f"fig25_tdx_latency_verification.{args.format}"
         elif fig_number == 26:
             needed = [

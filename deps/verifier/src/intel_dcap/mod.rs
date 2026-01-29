@@ -9,13 +9,24 @@ use intel_tee_quote_verification_rs::{
 };
 use serde_json::{Map, Value};
 use std::mem;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 use tracing::{debug, warn};
 
 mod claims;
 mod error;
 
 pub async fn ecdsa_quote_verification(quote: &[u8]) -> anyhow::Result<Map<String, Value>> {
+    let (claims, _) = ecdsa_quote_verification_inner(quote)?;
+    Ok(claims)
+}
+
+pub async fn ecdsa_quote_verification_with_timing(
+    quote: &[u8],
+) -> anyhow::Result<(Map<String, Value>, f64)> {
+    ecdsa_quote_verification_inner(quote)
+}
+
+fn ecdsa_quote_verification_inner(quote: &[u8]) -> anyhow::Result<(Map<String, Value>, f64)> {
     let mut supp_data: sgx_ql_qv_supplemental_t = Default::default();
     let mut supp_data_desc = tee_supp_data_descriptor_t {
         major_version: 0,
@@ -62,6 +73,7 @@ pub async fn ecdsa_quote_verification(quote: &[u8]) -> anyhow::Result<Map<String
     }
 
     // get collateral
+    let collateral_start = Instant::now();
     let collateral = match tee_qv_get_collateral(quote) {
         Ok(c) => {
             debug!("tee_qv_get_collateral successfully returned.");
@@ -72,6 +84,7 @@ pub async fn ecdsa_quote_verification(quote: &[u8]) -> anyhow::Result<Map<String
             None
         }
     };
+    let collateral_ms = collateral_start.elapsed().as_secs_f64() * 1000.0;
 
     // set current time. This is only for sample purposes, in production mode a trusted time should be used.
     let current_time = SystemTime::now()
@@ -105,10 +118,13 @@ pub async fn ecdsa_quote_verification(quote: &[u8]) -> anyhow::Result<Map<String
         | sgx_ql_qv_result_t::SGX_QL_QV_RESULT_CONFIG_AND_SW_HARDENING_NEEDED
         | sgx_ql_qv_result_t::SGX_QL_QV_RESULT_TD_RELAUNCH_ADVISED
         | sgx_ql_qv_result_t::SGX_QL_QV_RESULT_TD_RELAUNCH_ADVISED_CONFIG_NEEDED => {
-            Ok(prepare_custom_claims_map(
-                &mut supp_data,
-                collateral_expiration_status,
-                quote_verification_result,
+            Ok((
+                prepare_custom_claims_map(
+                    &mut supp_data,
+                    collateral_expiration_status,
+                    quote_verification_result,
+                ),
+                collateral_ms,
             ))
         }
         terminal_result => {

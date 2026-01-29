@@ -6,11 +6,12 @@ use tracing::{debug, error, info, instrument, warn};
 use crate::tdx::claims::generate_parsed_claim;
 
 use super::*;
-use crate::intel_dcap::{ecdsa_quote_verification, extend_using_custom_claims};
+use crate::intel_dcap::{ecdsa_quote_verification_with_timing, extend_using_custom_claims};
 use async_trait::async_trait;
 use base64::Engine;
 use quote::parse_tdx_quote;
 use serde::{Deserialize, Serialize};
+use std::time::Instant;
 
 pub(crate) mod claims;
 pub(crate) mod quote;
@@ -47,18 +48,39 @@ impl Verifier for Tdx {
     }
 }
 
+fn env_flag(name: &str) -> bool {
+    std::env::var(name)
+        .map(|v| {
+            matches!(
+                v.to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+        .unwrap_or(false)
+}
+
 async fn verify_evidence(
     expected_report_data: &ReportData<'_>,
     expected_init_data_hash: &InitDataHash<'_>,
     evidence: TdxEvidence,
 ) -> Result<TeeEvidenceParsedClaim> {
+    let timing_enabled = env_flag("AS_VERIFICATION_TIMING_JSON");
+    let verify_start = Instant::now();
+
     if evidence.quote.is_empty() {
         bail!("TDX Quote is empty.");
     }
 
     // Verify TD quote ECDSA signature.
     let quote_bin = base64::engine::general_purpose::STANDARD.decode(evidence.quote)?;
-    let custom_claims = ecdsa_quote_verification(quote_bin.as_slice()).await?;
+    let (custom_claims, collateral_ms) =
+        ecdsa_quote_verification_with_timing(quote_bin.as_slice()).await?;
+    if timing_enabled {
+        eprintln!(
+            "{{\"event\":\"as_tdx_collateral_timing\",\"tee\":\"Tdx\",\"mode\":\"native\",\"ms\":{ms:.3}}}",
+            ms = collateral_ms
+        );
+    }
 
     info!("Quote DCAP check succeeded.");
 
@@ -129,6 +151,14 @@ async fn verify_evidence(
     // Return Evidence parsed claim
     let mut claim = generate_parsed_claim(quote, ccel_option)?;
     extend_using_custom_claims(&mut claim, custom_claims)?;
+
+    if timing_enabled {
+        let total_ms = verify_start.elapsed().as_secs_f64() * 1000.0;
+        let ms = (total_ms - collateral_ms).max(0.0);
+        eprintln!(
+            "{{\"event\":\"as_verifier_timing\",\"tee\":\"Tdx\",\"mode\":\"native\",\"ms\":{ms:.3}}}"
+        );
+    }
 
     Ok(claim)
 }

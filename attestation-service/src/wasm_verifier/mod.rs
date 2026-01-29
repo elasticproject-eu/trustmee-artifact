@@ -333,6 +333,9 @@ impl HostState {
         let mut wasi = WasiCtxBuilder::new();
         wasi.inherit_stdio();
         wasi.env("DCAP_QVL_CACHE_DIR", "cache");
+        if let Ok(v) = std::env::var("AS_VERIFICATION_TIMING_JSON") {
+            wasi.env("AS_VERIFICATION_TIMING_JSON", v);
+        }
         if let Ok(v) = std::env::var("SNP_STEP_TIMING_JSON") {
             wasi.env("SNP_STEP_TIMING_JSON", v);
         }
