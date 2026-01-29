@@ -24,12 +24,36 @@ From the repo root (WSL):
 bash evaluation-tests/run_all.sh
 ```
 
-Results are written to `evaluation-tests/results`.
+Results are written to `evaluation-tests/results/<timestamp>` and include `system_info.txt`.
 
 for current version:
 ```bash
 PCCS_URL="https://sgx-dcap-server.cn-beijing.aliyuncs.com/sgx/certification/v4/" OPENSSL_DIR=/path/to/openssl-wasm/ NATIVE_OPENSSL_DIR=/path/to/openssl-native/ bash evaluation-tests/run_all.sh
 ```
+
+## Run in Docker
+
+Build the image from the repo root:
+
+```bash
+docker build -f evaluation-tests/Dockerfile -t trustee-eval .
+```
+
+Run the full suite (results are written to the mounted folders):
+
+```bash
+docker run --rm \
+  -e PCCS_URL="https://api.trustedservices.intel.com/sgx/certification/v4/" \
+  -v "$(pwd)/evaluation-tests/results:/work/evaluation-tests/results" \
+  -v "$(pwd)/evaluation-tests/attestation-results:/work/evaluation-tests/attestation-results" \
+  -v "$(pwd)/evaluation-tests/tmp:/work/evaluation-tests/tmp" \
+  trustee-eval
+```
+
+Notes:
+- Requires `linux/amd64` for Intel DCAP; use `--platform=linux/amd64` on ARM hosts.
+- The image builds OpenSSL 3.5.4 natively (shared) and for WASI Preview 2 (static).
+- Defaults: `OPENSSL_DIR=/opt/openssl/out/openssl-wasip2-simd`, `NATIVE_OPENSSL_DIR=/opt/openssl/out/openssl-native`, `OPENSSL_STATIC=0`.
 
 ## Build artifacts only
 

@@ -7,12 +7,9 @@ cd "$ROOT_DIR"
 echo "== build restful-as =="
 native_openssl_env=()
 if [[ -n "${NATIVE_OPENSSL_DIR:-}" ]]; then
-  native_openssl_env=(OPENSSL_DIR="${NATIVE_OPENSSL_DIR}" OPENSSL_NO_PKG_CONFIG=1)
+  native_openssl_env=(OPENSSL_DIR="${NATIVE_OPENSSL_DIR}" OPENSSL_NO_PKG_CONFIG=1 OPENSSL_STATIC=1)
   if [[ -z "${OPENSSL_NO_VENDOR:-}" ]]; then
     native_openssl_env+=(OPENSSL_NO_VENDOR=1)
-  fi
-  if [[ -z "${OPENSSL_STATIC:-}" ]]; then
-    native_openssl_env+=(OPENSSL_STATIC=1)
   fi
 fi
 
@@ -47,4 +44,5 @@ echo "== build snp verifier component =="
 env -u OPENSSL_NO_PKG_CONFIG CFLAGS= CXXFLAGS= \
   RUSTFLAGS='-C target-feature=+simd128' \
   OPENSSL_DIR="${OPENSSL_DIR}" \
+  OPENSSL_STATIC=1 \
   cargo build -p snp-verifier-component --release --target wasm32-wasip2

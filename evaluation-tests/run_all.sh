@@ -3,7 +3,9 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_DIR="$ROOT_DIR/evaluation-tests/bin"
-RESULTS_DIR="${RESULTS_DIR:-$ROOT_DIR/evaluation-tests/results}"
+RESULTS_BASE_DIR="${RESULTS_DIR:-$ROOT_DIR/evaluation-tests/results}"
+RUN_ID="${RUN_ID:-$(date +%Y%m%d_%H%M%S%z)}"
+RESULTS_DIR="$RESULTS_BASE_DIR/$RUN_ID"
 ATTESTATION_LOG_DIR="${ATTESTATION_LOG_DIR:-$ROOT_DIR/evaluation-tests/attestation-results}"
 TMP_DIR="${TMP_DIR:-$ROOT_DIR/evaluation-tests/tmp}"
 PORT="${PORT:-18080}"
@@ -22,6 +24,44 @@ fi
 
 mkdir -p "$RESULTS_DIR" "$ATTESTATION_LOG_DIR" "$TMP_DIR"
 
+write_system_info() {
+  local out="$1"
+  {
+    echo "timestamp: $(date +%Y-%m-%dT%H:%M:%S%z)"
+    echo "run_id: $RUN_ID"
+    echo "hostname: $(hostname)"
+    echo "kernel: $(uname -a)"
+    echo
+    echo "os_release:"
+    if [[ -f /etc/os-release ]]; then
+      cat /etc/os-release
+    else
+      echo "missing /etc/os-release"
+    fi
+    echo
+    echo "cpu:"
+    if command -v lscpu >/dev/null 2>&1; then
+      lscpu
+    elif [[ -f /proc/cpuinfo ]]; then
+      cat /proc/cpuinfo
+    else
+      echo "cpu info not available"
+    fi
+    echo
+    echo "memory:"
+    if command -v free >/dev/null 2>&1; then
+      free -h
+    elif [[ -f /proc/meminfo ]]; then
+      cat /proc/meminfo
+    else
+      echo "memory info not available"
+    fi
+  } > "$out"
+}
+
+SYSTEM_INFO_PATH="$RESULTS_DIR/system_info.txt"
+write_system_info "$SYSTEM_INFO_PATH"
+
 run_latency() {
   local tee="$1"
   local mode="$2"
@@ -36,7 +76,7 @@ run_latency() {
   python3 "$BIN_DIR/eval_latency.py" \
     --url "$AS_URL" \
     --tee "$tee" \
-    --runs 100 \
+    --runs 1 \
     --output "$out" \
     --result-log "$result_log" \
     "${dump_arg[@]}" \
@@ -74,7 +114,7 @@ run_resources() {
   shift 3
   python3 "$BIN_DIR/eval_resources.py" \
     --pid "$pid" \
-    --samples 100 \
+    --samples 1 \
     --interval 1 \
     --url "$AS_URL" \
     --tee "$tee" \
@@ -142,5 +182,9 @@ parse_verifier_timing "$WASM_LOG" "Tdx" "wasm" "$RESULTS_DIR/tdx_wasm_verifier_t
 run_resources tdx "$PID" "$RESULTS_DIR/tdx_wasm_resources.json" --component-id "$TDX_COMPONENT_ID"
 "$BIN_DIR/stop_restful_as.sh" wasm
 
+echo "== generate figures =="
+python3 "$BIN_DIR/plot_figures.py" --results-dir "$RESULTS_DIR" --preset evaluation-all
+
 echo "results written to: $RESULTS_DIR"
+echo "system info written to: $SYSTEM_INFO_PATH"
 echo "attestation logs written to: $ATTESTATION_LOG_DIR"
