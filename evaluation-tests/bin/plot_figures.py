@@ -303,11 +303,11 @@ def build_breakdown_twopanel(
     bar_compare(
         axes[0],
         breakdown.labels,
-        breakdown.wasm_mean,
-        breakdown.wasm_std,
+        breakdown.native_mean,
+        breakdown.native_std,
         [colors[0]] * len(breakdown.labels),
         "Time (ms)",
-        "(a) Wasm Verification Time",
+        "(a) Native Verification Time",
         show_values,
         axis_max=axis_max,
         pad_ratio=0.03,
@@ -317,11 +317,11 @@ def build_breakdown_twopanel(
     bar_compare(
         axes[1],
         breakdown.labels,
-        breakdown.native_mean,
-        breakdown.native_std,
+        breakdown.wasm_mean,
+        breakdown.wasm_std,
         [colors[1]] * len(breakdown.labels),
         "Time (ms)",
-        "(b) Native Verification Time",
+        "(b) Wasm Verification Time",
         show_values,
         axis_max=axis_max,
         pad_ratio=0.03,
@@ -725,7 +725,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
             if not ensure_files(needed, args.strict, fig_number):
                 continue
             resources = load_resources(results_dir, "snp")
-            fig = build_resources_twopanel("SNP", resources, fig_w, fig_h, show_values)
+            fig = build_resources_twopanel("AMD SEV-SNP", resources, fig_w, fig_h, show_values)
             out_path = output_dir / f"fig24_snp_resources.{args.format}"
         elif fig_number == 25:
             needed = [
@@ -773,7 +773,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
             if not ensure_files(needed, args.strict, fig_number):
                 continue
             resources = load_resources(results_dir, "tdx")
-            fig = build_resources_twopanel("TDX", resources, fig_w, fig_h, show_values)
+            fig = build_resources_twopanel("Intel TDX", resources, fig_w, fig_h, show_values)
             out_path = output_dir / f"fig27_tdx_resources.{args.format}"
 
         if fig is not None and out_path is not None:

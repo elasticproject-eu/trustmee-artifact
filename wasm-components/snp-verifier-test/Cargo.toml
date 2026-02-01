@@ -14,6 +14,6 @@ sev = { git = "https://github.com/virtee/sev", rev = "d487809188c3c92e397bc92e2c
     "snp",
     "serde",
 ] }
-wasmtime = { version = "25.0.0", features = ["component-model"] }
-wasmtime-wasi = { version = "25.0.0" }
-wasmtime-wasi-http = { version = "25.0.0" }
+wasmtime = { version = "41.0.1", features = ["component-model"] }
+wasmtime-wasi = { version = "41.0.1" }
+wasmtime-wasi-http = { version = "41.0.1" }

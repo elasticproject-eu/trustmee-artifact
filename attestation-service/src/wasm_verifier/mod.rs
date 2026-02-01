@@ -11,14 +11,16 @@ use tracing::{debug, info, warn};
 use uuid::Uuid;
 use wasmsign2::PublicKeySet;
 use wasmtime::component::{Component, Linker, ResourceTable};
-use wasmtime::{Engine, Store};
-use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime::{Cache, Engine, Store};
+use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 wasmtime::component::bindgen!({
     path: "../wasm-components/tdx-verifier-component/wit",
     world: "verifier",
-    async: true,
+    exports: {
+        default: async,
+    },
 });
 
 pub struct WasmVerifierHost {
@@ -103,7 +105,6 @@ impl WasmVerifierHost {
         // See: https://bytecodealliance.github.io/wasmtime/cli-cache.html
         let cache_toml = format!(
             "[cache]\n\
-enabled = true\n\
 directory = \"{}\"\n",
             cache_dir.display()
         );
@@ -113,10 +114,9 @@ directory = \"{}\"\n",
                 .with_context(|| format!("write {}", cache_config_path.display()))?;
         }
 
-        // `cache_config_load` requires wasmtime's `cache` feature (enabled in Cargo.toml).
-        wasmtime_cfg
-            .cache_config_load(&cache_config_path)
+        let cache = Cache::from_file(Some(&cache_config_path))
             .with_context(|| format!("load wasmtime cache config {}", cache_config_path.display()))?;
+        wasmtime_cfg.cache(Some(cache));
 
         let engine = Engine::new(&wasmtime_cfg).context("create wasmtime engine")?;
 
@@ -252,7 +252,7 @@ directory = \"{}\"\n",
         };
 
         let mut linker = Linker::<HostState>::new(&self.engine);
-        wasmtime_wasi::add_to_linker_async(&mut linker)?;
+        wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
         wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)?;
 
         let host_state = HostState::new(&self.cfg.wasi_cache_dir)?;
@@ -363,11 +363,11 @@ struct HostState {
 }
 
 impl WasiView for HostState {
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
-    }
-    fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.wasi
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.table,
+        }
     }
 }
 

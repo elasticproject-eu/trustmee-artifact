@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 FROM ghcr.io/webassembly/wasi-sdk:wasi-sdk-29 AS wasi-sdk
 
-FROM rust:1.85.1
+FROM rust:1.90.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -24,6 +24,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-matplotlib \
     python3-numpy \
     && rm -rf /var/lib/apt/lists/*
+
+RUN cargo install wasmsign2-cli --version 0.2.6
 
 # Intel SGX DCAP dependencies (amd64 only).
 RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \

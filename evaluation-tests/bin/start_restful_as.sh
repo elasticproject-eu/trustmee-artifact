@@ -31,6 +31,7 @@ fi
 
 python3 - "$CFG_PATH" "$WORK_DIR" "$ROOT_DIR" "$MODE" <<'PY'
 import json
+import os
 import sys
 
 cfg_path = sys.argv[1]
@@ -38,6 +39,13 @@ work_dir = sys.argv[2]
 root_dir = sys.argv[3]
 mode = sys.argv[4]
 wasm_enabled = mode == "wasm"
+trusted_keys_env = os.environ.get("WASM_TRUSTED_PUBLIC_KEYS", "")
+trusted_keys = [p for p in trusted_keys_env.split(os.pathsep) if p]
+allow_unsigned_env = os.environ.get("WASM_ALLOW_UNSIGNED")
+if allow_unsigned_env is None:
+    allow_unsigned = not bool(trusted_keys)
+else:
+    allow_unsigned = allow_unsigned_env.strip().lower() in ("1", "true", "yes", "y")
 cfg = {
     "work_dir": work_dir,
     "rvps_config": {
@@ -49,7 +57,8 @@ cfg = {
     },
     "wasm_verifier": {
         "enabled": wasm_enabled,
-        "allow_unsigned": True,
+        "allow_unsigned": allow_unsigned,
+        "trusted_public_keys": trusted_keys,
         "registry_dir": work_dir + "/components",
         "wasi_cache_dir": work_dir + "/wasm-cache",
     },

@@ -13,6 +13,11 @@ AS_URL="http://127.0.0.1:${PORT}/attestation"
 COMPONENT_URL="http://127.0.0.1:${PORT}/component"
 WASM_WORK_DIR="${WASM_WORK_DIR:-/tmp/as-eval-wasm}"
 WASM_CACHE_DIR="${WASM_CACHE_DIR:-$WASM_WORK_DIR/wasm-cache}"
+WASM_SIGNATURE_ENFORCE="${WASM_SIGNATURE_ENFORCE:-0}"
+WASM_SIGNING_DIR="${WASM_SIGNING_DIR:-$TMP_DIR/wasm-signing}"
+WASM_SIGNING_PUBLIC_KEY="${WASM_SIGNING_PUBLIC_KEY:-$WASM_SIGNING_DIR/wasm-signing.public}"
+WASM_SIGNING_SECRET_KEY="${WASM_SIGNING_SECRET_KEY:-$WASM_SIGNING_DIR/wasm-signing.secret}"
+SIGNED_COMPONENT_DIR="${SIGNED_COMPONENT_DIR:-$TMP_DIR/signed-components}"
 
 if [[ -n "${NATIVE_OPENSSL_DIR:-}" ]]; then
   OPENSSL_LIB_DIR="$NATIVE_OPENSSL_DIR/lib64"
@@ -40,6 +45,23 @@ write_system_info() {
     else
       echo "missing /etc/os-release"
     fi
+    local wasmtime_version=""
+    if command -v wasmtime >/dev/null 2>&1; then
+      wasmtime_version="$(wasmtime --version 2>/dev/null | head -n 1)"
+    elif [[ -f "$ROOT_DIR/Cargo.lock" ]]; then
+      wasmtime_version="$(
+        awk '
+          $1 == "name" && $3 == "\"wasmtime\"" { in_pkg = 1; next }
+          in_pkg && $1 == "version" { gsub(/"/, "", $3); print $3; exit }
+          in_pkg && $1 == "name" { in_pkg = 0 }
+        ' "$ROOT_DIR/Cargo.lock"
+      )"
+    fi
+    if [[ -n "$wasmtime_version" ]]; then
+      echo
+      echo "wasmtime:"
+      echo "version: $wasmtime_version"
+    fi
     echo
     echo "cpu:"
     if command -v lscpu >/dev/null 2>&1; then
@@ -63,6 +85,33 @@ write_system_info() {
 
 SYSTEM_INFO_PATH="$RESULTS_DIR/system_info.txt"
 write_system_info "$SYSTEM_INFO_PATH"
+
+ensure_wasm_signing_tools() {
+  if ! command -v wasmsign2 >/dev/null 2>&1; then
+    echo "wasmsign2 CLI not found; install wasmsign2-cli or disable WASM_SIGNATURE_ENFORCE" >&2
+    exit 2
+  fi
+}
+
+prepare_wasm_signing_keys() {
+  mkdir -p "$WASM_SIGNING_DIR"
+  if [[ ! -f "$WASM_SIGNING_PUBLIC_KEY" || ! -f "$WASM_SIGNING_SECRET_KEY" ]]; then
+    wasmsign2 keygen --public-key "$WASM_SIGNING_PUBLIC_KEY" --secret-key "$WASM_SIGNING_SECRET_KEY"
+  fi
+  export WASM_TRUSTED_PUBLIC_KEYS="$WASM_SIGNING_PUBLIC_KEY"
+}
+
+sign_wasm_component() {
+  local input_path="$1"
+  local output_path="$2"
+  local sign_log="${output_path}.sign.log"
+  wasmsign2 sign \
+    --input-file "$input_path" \
+    --output-file "$output_path" \
+    --secret-key "$WASM_SIGNING_SECRET_KEY" \
+    --public-key "$WASM_SIGNING_PUBLIC_KEY" \
+    >"$sign_log"
+}
 
 run_latency() {
   local tee="$1"
@@ -141,6 +190,12 @@ run_resources() {
 echo "== build artifacts =="
 "$BIN_DIR/build_artifacts.sh"
 
+if [[ "$WASM_SIGNATURE_ENFORCE" == "1" ]]; then
+  ensure_wasm_signing_tools
+  prepare_wasm_signing_keys
+  mkdir -p "$SIGNED_COMPONENT_DIR"
+fi
+
 echo "== SNP native =="
 SNP_STEP_TIMING_JSON=1 SNP_TIMING_MODE=native AS_VERIFICATION_TIMING_JSON=1 \
   PORT="$PORT" TMP_DIR="$TMP_DIR" "$BIN_DIR/start_restful_as.sh" native
@@ -159,10 +214,16 @@ SNP_STEP_TIMING_JSON=1 SNP_TIMING_MODE=wasm AS_VERIFICATION_TIMING_JSON=1 \
   PORT="$PORT" TMP_DIR="$TMP_DIR" WORK_DIR="$WASM_WORK_DIR" "$BIN_DIR/start_restful_as.sh" wasm
 WASM_LOG="$TMP_DIR/restful-as-wasm.log"
 PID="$(cat "$TMP_DIR/restful-as-wasm.pid")"
+SNP_COMPONENT_PATH="$ROOT_DIR/target/wasm32-wasip2/release/snp_verifier_component.wasm"
+SNP_COMPONENT_FOR_REG="$SNP_COMPONENT_PATH"
+if [[ "$WASM_SIGNATURE_ENFORCE" == "1" ]]; then
+  SNP_COMPONENT_FOR_REG="$SIGNED_COMPONENT_DIR/snp_verifier_component.signed.wasm"
+  sign_wasm_component "$SNP_COMPONENT_PATH" "$SNP_COMPONENT_FOR_REG"
+fi
 SNP_COMPONENT_ID="$(
   python3 "$BIN_DIR/register_component.py" \
     --url "$COMPONENT_URL" \
-    --component "$ROOT_DIR/target/wasm32-wasip2/release/snp_verifier_component.wasm"
+    --component "$SNP_COMPONENT_FOR_REG"
 )"
 run_latency snp wasm "$RESULTS_DIR/snp_wasm_latency.json" --component-id "$SNP_COMPONENT_ID"
 parse_verifier_timing "$WASM_LOG" "Snp" "wasm" "$RESULTS_DIR/snp_wasm_verifier_time.json"
@@ -190,10 +251,16 @@ AS_VERIFICATION_TIMING_JSON=1 DCAP_QVL_DISABLE_CACHE=1 PORT="$PORT" TMP_DIR="$TM
   WORK_DIR="$WASM_WORK_DIR" "$BIN_DIR/start_restful_as.sh" wasm
 WASM_LOG="$TMP_DIR/restful-as-wasm.log"
 PID="$(cat "$TMP_DIR/restful-as-wasm.pid")"
+TDX_COMPONENT_PATH="$ROOT_DIR/target/wasm32-wasip2/release/tdx_verifier_component.wasm"
+TDX_COMPONENT_FOR_REG="$TDX_COMPONENT_PATH"
+if [[ "$WASM_SIGNATURE_ENFORCE" == "1" ]]; then
+  TDX_COMPONENT_FOR_REG="$SIGNED_COMPONENT_DIR/tdx_verifier_component.signed.wasm"
+  sign_wasm_component "$TDX_COMPONENT_PATH" "$TDX_COMPONENT_FOR_REG"
+fi
 TDX_COMPONENT_ID="$(
   python3 "$BIN_DIR/register_component.py" \
     --url "$COMPONENT_URL" \
-    --component "$ROOT_DIR/target/wasm32-wasip2/release/tdx_verifier_component.wasm"
+    --component "$TDX_COMPONENT_FOR_REG"
 )"
 run_latency tdx wasm "$RESULTS_DIR/tdx_wasm_latency.json" --component-id "$TDX_COMPONENT_ID" \
   --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5

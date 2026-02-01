@@ -127,7 +127,7 @@ fn main() -> Result<()> {
         .with_context(|| format!("load component {}", args.component.display()))?;
 
     let mut linker = Linker::<HostState>::new(&engine);
-    wasmtime_wasi::add_to_linker_sync(&mut linker)?;
+    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
     wasmtime_wasi_http::add_only_http_to_linker_sync(&mut linker)?;
 
     let state = HostState::new()?;
@@ -178,11 +178,11 @@ impl HostState {
 }
 
 impl wasmtime_wasi::WasiView for HostState {
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
-    }
-    fn ctx(&mut self) -> &mut wasmtime_wasi::WasiCtx {
-        &mut self.wasi
+    fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView<'_> {
+        wasmtime_wasi::WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.table,
+        }
     }
 }
 
