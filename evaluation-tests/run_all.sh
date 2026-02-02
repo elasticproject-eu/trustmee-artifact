@@ -280,7 +280,7 @@ parse_verifier_timing "$NATIVE_LOG" "Tdx" "native" "$RESULTS_DIR/tdx_native_veri
 "$BIN_DIR/stop_restful_as.sh" native
 
 echo "== generate figures =="
-python3 "$BIN_DIR/plot_figures.py" --results-dir "$RESULTS_DIR" --preset evaluation-all
+python3 "$BIN_DIR/plot_figures.py" --results-dir "$RESULTS_DIR" --preset evaluation --paper
 
 echo "results written to: $RESULTS_DIR"
 echo "system info written to: $SYSTEM_INFO_PATH"
