@@ -235,7 +235,7 @@ directory = \"{}\"\n",
         expected_report_data: Option<&[u8]>,
         expected_init_data_hash: Option<&[u8]>,
     ) -> Result<Value> {
-        let component = self
+        let (component, component_id) = self
             .resolve_component(component_id, component_bytes)
             .await
             .context("resolve component")?;
@@ -255,7 +255,8 @@ directory = \"{}\"\n",
         wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
         wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)?;
 
-        let host_state = HostState::new(&self.cfg.wasi_cache_dir)?;
+        let cache_dir = self.cache_dir_for_component(&component_id)?;
+        let host_state = HostState::new(&cache_dir)?;
         let mut store = Store::new(&self.engine, host_state);
 
         let bindings = Verifier::instantiate_async(&mut store, &component, &linker).await?;
@@ -284,17 +285,19 @@ directory = \"{}\"\n",
         &self,
         component_id: Option<&str>,
         component_bytes: Option<&[u8]>,
-    ) -> Result<Component> {
+    ) -> Result<(Component, String)> {
         if let Some(bytes) = component_bytes {
             // Attestation API path: verify signature, then register/dedupe and use cached compiled component.
             let id = self.register_component(bytes).await?;
-            return self.get_compiled_component(&id).await;
+            let component = self.get_compiled_component(&id).await?;
+            return Ok((component, id));
         }
 
         let Some(component_id) = component_id else {
             bail!("no component_id or component bytes provided");
         };
-        self.get_compiled_component(component_id).await
+        let component = self.get_compiled_component(component_id).await?;
+        Ok((component, component_id.to_string()))
     }
 
     async fn get_compiled_component(&self, component_id: &str) -> Result<Component> {
@@ -326,16 +329,24 @@ directory = \"{}\"\n",
             .map_err(|e| anyhow!("component signature invalid: {e}"))?;
         Ok(())
     }
+
+    fn cache_dir_for_component(&self, component_id: &str) -> Result<PathBuf> {
+        let dir = self
+            .cfg
+            .wasi_cache_dir
+            .join(format!("dcap-qvl-{component_id}"));
+        std::fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
+        Ok(dir)
+    }
 }
 
 impl HostState {
-    fn new(wasi_cache_dir: &Path) -> Result<Self> {
+    fn new(cache_dir: &Path) -> Result<Self> {
         let mut wasi = WasiCtxBuilder::new();
         wasi.inherit_stdio();
-        let cache_path = wasi_cache_dir.join(format!("dcap-qvl-{}", Uuid::new_v4()));
-        std::fs::create_dir_all(&cache_path)
-            .with_context(|| format!("create {}", cache_path.display()))?;
-        // Only expose the per-instance cache directory to the guest.
+        std::fs::create_dir_all(cache_dir)
+            .with_context(|| format!("create {}", cache_dir.display()))?;
+        // Only expose the component cache directory to the guest.
         wasi.env("DCAP_QVL_CACHE_DIR", "cache");
         if let Ok(v) = std::env::var("DCAP_QVL_DISABLE_CACHE") {
             wasi.env("DCAP_QVL_DISABLE_CACHE", v);
@@ -349,8 +360,8 @@ impl HostState {
         if let Ok(v) = std::env::var("SNP_TIMING_MODE") {
             wasi.env("SNP_TIMING_MODE", v);
         }
-        wasi.preopened_dir(&cache_path, "cache", DirPerms::all(), FilePerms::all())
-            .with_context(|| format!("preopen {}", cache_path.display()))?;
+        wasi.preopened_dir(cache_dir, "cache", DirPerms::all(), FilePerms::all())
+            .with_context(|| format!("preopen {}", cache_dir.display()))?;
 
         Ok(Self {
             table: ResourceTable::new(),

@@ -279,6 +279,48 @@ run_latency tdx native "$RESULTS_DIR/tdx_native_latency_dcap_qvl.json" \
 parse_verifier_timing "$NATIVE_LOG" "Tdx" "native" "$RESULTS_DIR/tdx_native_verifier_time_dcap_qvl.json"
 "$BIN_DIR/stop_restful_as.sh" native
 
+echo "== TDX dcap-qvl cache disabled (E2E) =="
+AS_VERIFICATION_TIMING_JSON=1 TDX_NATIVE_USE_DCAP_QVL=1 DCAP_QVL_DISABLE_CACHE=1 \
+  DCAP_QVL_CACHE_DIR="$WASM_CACHE_DIR" PORT="$PORT" TMP_DIR="$TMP_DIR" \
+  "$BIN_DIR/start_restful_as.sh" native
+PID="$(cat "$TMP_DIR/restful-as-native.pid")"
+run_latency tdx native "$RESULTS_DIR/tdx_native_latency_dcap_qvl_cache_off.json" \
+  --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
+"$BIN_DIR/stop_restful_as.sh" native
+
+AS_VERIFICATION_TIMING_JSON=1 DCAP_QVL_DISABLE_CACHE=1 PORT="$PORT" TMP_DIR="$TMP_DIR" \
+  WORK_DIR="$WASM_WORK_DIR" "$BIN_DIR/start_restful_as.sh" wasm
+PID="$(cat "$TMP_DIR/restful-as-wasm.pid")"
+TDX_COMPONENT_ID="$(
+  python3 "$BIN_DIR/register_component.py" \
+    --url "$COMPONENT_URL" \
+    --component "$TDX_COMPONENT_FOR_REG"
+)"
+run_latency tdx wasm "$RESULTS_DIR/tdx_wasm_latency_dcap_qvl_cache_off.json" --component-id "$TDX_COMPONENT_ID" \
+  --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
+"$BIN_DIR/stop_restful_as.sh" wasm
+
+echo "== TDX dcap-qvl cache enabled (E2E) =="
+AS_VERIFICATION_TIMING_JSON=1 TDX_NATIVE_USE_DCAP_QVL=1 DCAP_QVL_CACHE_DIR="$WASM_CACHE_DIR" \
+  PORT="$PORT" TMP_DIR="$TMP_DIR" \
+  "$BIN_DIR/start_restful_as.sh" native
+PID="$(cat "$TMP_DIR/restful-as-native.pid")"
+run_latency tdx native "$RESULTS_DIR/tdx_native_latency_dcap_qvl_cache_on.json" \
+  --warmup 1 --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
+"$BIN_DIR/stop_restful_as.sh" native
+
+AS_VERIFICATION_TIMING_JSON=1 PORT="$PORT" TMP_DIR="$TMP_DIR" \
+  WORK_DIR="$WASM_WORK_DIR" "$BIN_DIR/start_restful_as.sh" wasm
+PID="$(cat "$TMP_DIR/restful-as-wasm.pid")"
+TDX_COMPONENT_ID="$(
+  python3 "$BIN_DIR/register_component.py" \
+    --url "$COMPONENT_URL" \
+    --component "$TDX_COMPONENT_FOR_REG"
+)"
+run_latency tdx wasm "$RESULTS_DIR/tdx_wasm_latency_dcap_qvl_cache_on.json" --component-id "$TDX_COMPONENT_ID" \
+  --warmup 1 --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
+"$BIN_DIR/stop_restful_as.sh" wasm
+
 echo "== generate figures =="
 python3 "$BIN_DIR/plot_figures.py" --results-dir "$RESULTS_DIR" --preset evaluation --paper
 
