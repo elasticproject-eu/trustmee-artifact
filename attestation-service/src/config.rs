@@ -35,7 +35,7 @@ pub struct Config {
     pub wasm_verifier: WasmVerifierConfig,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
 pub struct WasmVerifierConfig {
     /// Enable loading and invoking Wasm component verifiers.
     #[serde(default)]
@@ -74,20 +74,6 @@ pub struct WasmVerifierConfig {
     /// artifacts under `<work_dir>/wasmtime-cache/`.
     #[serde(default)]
     pub wasmtime_cache_config: Option<PathBuf>,
-}
-
-impl Default for WasmVerifierConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            allow_unsigned: false,
-            trusted_public_keys: vec![],
-            registry_dir: None,
-            default_component_id: None,
-            wasi_cache_dir: None,
-            wasmtime_cache_config: None,
-        }
-    }
 }
 
 fn default_work_dir() -> PathBuf {
