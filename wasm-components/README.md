@@ -42,8 +42,11 @@ Optional inputs:
 - `--vlek /path/to/vlek.der` (use VLEK instead of VCEK)
 - `--expected-report-data-hex <hex>`
 - `--expected-init-data-hash-hex <hex>`
+- `--cache-dir <host-dir>` (VCEK cache base; a fresh subdirectory is pre-opened to the component as `cache/`)
 
 If no VCEK/VLEK is provided, the component will fetch VCEK from AMD KDS using WASI-HTTP.
+If the host pre-opens a `cache/` directory for the component, fetched VCEKs are cached there.
+Set `SNP_VCEK_DISABLE_CACHE=1` to disable VCEK caching.
 
 ## Smoke test Trustee integration (RESTful-AS)
 

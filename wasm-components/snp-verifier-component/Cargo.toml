@@ -24,6 +24,7 @@ sev = { git = "https://github.com/virtee/sev", rev = "d487809188c3c92e397bc92e2c
     "snp",
     "serde",
 ] }
+sha2.workspace = true
 strum.workspace = true
 tracing.workspace = true
 waki = "0.5.1"

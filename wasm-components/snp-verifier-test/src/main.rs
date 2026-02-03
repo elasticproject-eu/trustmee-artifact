@@ -8,7 +8,9 @@ use sev::{
     },
     parser::ByteParser,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Store};
 
@@ -40,6 +42,10 @@ struct Args {
     #[arg(long)]
     vlek: Option<PathBuf>,
 
+    /// Base cache directory on the host; a fresh subdirectory is pre-opened to the guest as `cache/`.
+    #[arg(long, default_value = ".snp-verifier-cache")]
+    cache_dir: PathBuf,
+
     /// Expected REPORT_DATA binding (hex string, <= 64 bytes; padded/truncated).
     #[arg(long)]
     expected_report_data_hex: Option<String>,
@@ -59,6 +65,20 @@ fn decode_hex(s: &str) -> Result<Vec<u8>> {
     let s = s.trim();
     let s = s.strip_prefix("0x").unwrap_or(s);
     hex::decode(s).context("decode hex")
+}
+
+static CACHE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn unique_cache_dir(base: &Path) -> Result<PathBuf> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let nanos = now.as_nanos();
+    let seq = CACHE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let pid = std::process::id();
+    let dir = base.join(format!("snp-vcek-cache-{nanos:x}-{pid}-{seq}"));
+    std::fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
+    Ok(dir)
 }
 
 fn main() -> Result<()> {
@@ -110,6 +130,10 @@ fn main() -> Result<()> {
         serde_json::to_vec(&evidence).context("serialize evidence JSON")?
     };
 
+    std::fs::create_dir_all(&args.cache_dir)
+        .with_context(|| format!("create {}", args.cache_dir.display()))?;
+    let cache_dir = unique_cache_dir(&args.cache_dir)?;
+
     let expected_report_data = match args.expected_report_data_hex.as_deref() {
         Some(s) => exports::trustee::verifier::verifier_interface::OptionalData::Value(decode_hex(s)?),
         None => exports::trustee::verifier::verifier_interface::OptionalData::NotProvided,
@@ -130,7 +154,7 @@ fn main() -> Result<()> {
     wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
     wasmtime_wasi_http::add_only_http_to_linker_sync(&mut linker)?;
 
-    let state = HostState::new()?;
+    let state = HostState::new(&cache_dir)?;
     let mut store = Store::new(&engine, state);
 
     let bindings = Verifier::instantiate(&mut store, &component, &linker)?;
@@ -165,9 +189,16 @@ struct HostState {
 }
 
 impl HostState {
-    fn new() -> Result<Self> {
+    fn new(cache_dir: &Path) -> Result<Self> {
         let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
         wasi.inherit_stdio();
+        wasi.env("DCAP_QVL_CACHE_DIR", "cache");
+        wasi.env("SNP_VCEK_CACHE_DIR", "cache");
+
+        // Pre-open the cache dir as `cache/` for the component.
+        use wasmtime_wasi::{DirPerms, FilePerms};
+        wasi.preopened_dir(cache_dir, "cache", DirPerms::all(), FilePerms::all())
+            .with_context(|| format!("preopen {}", cache_dir.display()))?;
 
         Ok(Self {
             table: ResourceTable::new(),

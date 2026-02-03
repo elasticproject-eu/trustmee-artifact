@@ -15,10 +15,12 @@ use sev::{
     },
     parser::ByteParser,
 };
+use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     env,
     hash::Hash,
+    path::{Path, PathBuf},
     sync::LazyLock,
     time::Instant,
 };
@@ -132,6 +134,56 @@ impl Snp {
         Self
     }
 
+    fn cache_disabled() -> bool {
+        env::var("SNP_VCEK_DISABLE_CACHE").is_ok()
+            || env::var("DCAP_QVL_DISABLE_CACHE").is_ok()
+    }
+
+    fn cache_dir() -> Option<PathBuf> {
+        if Self::cache_disabled() {
+            return None;
+        }
+        if let Ok(dir) = env::var("SNP_VCEK_CACHE_DIR") {
+            if !dir.is_empty() {
+                return Some(PathBuf::from(dir));
+            }
+        }
+        if let Ok(dir) = env::var("DCAP_QVL_CACHE_DIR") {
+            if !dir.is_empty() {
+                return Some(PathBuf::from(dir));
+            }
+        }
+        let default = PathBuf::from("cache");
+        if default.exists() {
+            Some(default)
+        } else {
+            None
+        }
+    }
+
+    fn cache_path(cache_dir: &Path, vcek_url: &str) -> PathBuf {
+        let mut hasher = Sha256::new();
+        hasher.update(vcek_url.as_bytes());
+        let key = hex::encode(hasher.finalize());
+        cache_dir.join("snp-vcek").join(format!("{key}.der"))
+    }
+
+    fn read_cache(cache_dir: &Path, vcek_url: &str) -> Option<Vec<u8>> {
+        let path = Self::cache_path(cache_dir, vcek_url);
+        std::fs::read(path).ok()
+    }
+
+    fn write_cache(cache_dir: &Path, vcek_url: &str, data: &[u8]) -> Result<()> {
+        let path = Self::cache_path(cache_dir, vcek_url);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("create {}", parent.display()))?;
+        }
+        std::fs::write(&path, data)
+            .with_context(|| format!("write {}", path.display()))?;
+        Ok(())
+    }
+
     /// Fetches the VCEK from the Key Distribution Service (KDS) using the provided attestation report.
     /// Returns the VCEK in DER format.
     fn fetch_vcek_from_kds(
@@ -183,6 +235,13 @@ impl Snp {
             }
         };
 
+        if let Some(cache_dir) = Self::cache_dir() {
+            if let Some(bytes) = Self::read_cache(&cache_dir, &vcek_url) {
+                debug!("VCEK cache: HIT {}", vcek_url);
+                return Ok(bytes);
+            }
+        }
+
         let start = Instant::now();
         let resp = waki::Client::new()
             .get(&vcek_url)
@@ -200,6 +259,14 @@ impl Snp {
 
         if status != 200 {
             bail!("Unable to fetch VCEK from URL: HTTP {status}, {vcek_url}");
+        }
+
+        if let Some(cache_dir) = Self::cache_dir() {
+            if let Err(err) = Self::write_cache(&cache_dir, &vcek_url, &body) {
+                warn!("VCEK cache: write failed for {}: {}", vcek_url, err);
+            } else {
+                debug!("VCEK cache: stored {}", vcek_url);
+            }
         }
 
         Ok(body)
