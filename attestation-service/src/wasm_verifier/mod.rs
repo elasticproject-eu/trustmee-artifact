@@ -332,6 +332,10 @@ impl HostState {
     fn new(wasi_cache_dir: &Path) -> Result<Self> {
         let mut wasi = WasiCtxBuilder::new();
         wasi.inherit_stdio();
+        let cache_path = wasi_cache_dir.join(format!("dcap-qvl-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&cache_path)
+            .with_context(|| format!("create {}", cache_path.display()))?;
+        // Only expose the per-instance cache directory to the guest.
         wasi.env("DCAP_QVL_CACHE_DIR", "cache");
         if let Ok(v) = std::env::var("DCAP_QVL_DISABLE_CACHE") {
             wasi.env("DCAP_QVL_DISABLE_CACHE", v);
@@ -345,8 +349,8 @@ impl HostState {
         if let Ok(v) = std::env::var("SNP_TIMING_MODE") {
             wasi.env("SNP_TIMING_MODE", v);
         }
-        wasi.preopened_dir(wasi_cache_dir, "cache", DirPerms::all(), FilePerms::all())
-            .with_context(|| format!("preopen {}", wasi_cache_dir.display()))?;
+        wasi.preopened_dir(&cache_path, "cache", DirPerms::all(), FilePerms::all())
+            .with_context(|| format!("preopen {}", cache_path.display()))?;
 
         Ok(Self {
             table: ResourceTable::new(),

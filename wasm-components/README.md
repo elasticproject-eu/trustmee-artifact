@@ -29,7 +29,7 @@ Optional inputs:
 - `--pccs-url https://api.trustedservices.intel.com` (defaults to Intel PCS)
 - `--expected-report-data-hex <hex>`
 - `--expected-init-data-hash-hex <hex>`
-- `--cache-dir <host-dir>` (collateral cache; pre-opened to the component as `cache/`)
+- `--cache-dir <host-dir>` (collateral cache base; a fresh subdirectory is pre-opened to the component as `cache/`)
 
 On verification failure, the component returns JSON like `{"status":"failed","error":"..."}` and the host exits non-zero.
 

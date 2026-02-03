@@ -2,6 +2,8 @@ use anyhow::{anyhow, bail, Context, Result};
 use base64::Engine as _;
 use clap::Parser;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Store};
 
@@ -29,7 +31,7 @@ struct Args {
     #[arg(long)]
     pccs_url: Option<String>,
 
-    /// Cache directory on the host; will be pre-opened to the guest as `cache/`.
+    /// Base cache directory on the host; a fresh subdirectory is pre-opened to the guest as `cache/`.
     #[arg(long, default_value = ".tdx-verifier-cache")]
     cache_dir: PathBuf,
 
@@ -48,6 +50,20 @@ fn decode_hex(s: &str) -> Result<Vec<u8>> {
     hex::decode(s).context("decode hex")
 }
 
+static CACHE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn unique_cache_dir(base: &Path) -> Result<PathBuf> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let nanos = now.as_nanos();
+    let seq = CACHE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let pid = std::process::id();
+    let dir = base.join(format!("dcap-qvl-cache-{nanos:x}-{pid}-{seq}"));
+    std::fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
+    Ok(dir)
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
 
@@ -62,6 +78,7 @@ fn main() -> Result<()> {
 
     std::fs::create_dir_all(&args.cache_dir)
         .with_context(|| format!("create {}", args.cache_dir.display()))?;
+    let cache_dir = unique_cache_dir(&args.cache_dir)?;
 
     let evidence_json = serde_json::json!({
         "quote": base64::engine::general_purpose::STANDARD.encode(&quote),
@@ -90,7 +107,7 @@ fn main() -> Result<()> {
     wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
     wasmtime_wasi_http::add_only_http_to_linker_sync(&mut linker)?;
 
-    let state = HostState::new(&args.cache_dir, args.pccs_url.as_deref())?;
+    let state = HostState::new(&cache_dir, args.pccs_url.as_deref())?;
     let mut store = Store::new(&engine, state);
 
     let bindings = Verifier::instantiate(&mut store, &component, &linker)?;

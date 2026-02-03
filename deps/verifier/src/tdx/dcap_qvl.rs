@@ -4,9 +4,11 @@ use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant, SystemTime};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const DEFAULT_PCS_URL: &str = "https://api.trustedservices.intel.com";
+static CACHE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn now_secs() -> u64 {
     SystemTime::now()
@@ -66,6 +68,18 @@ fn cached_collateral_is_fresh(collateral: &::dcap_qvl::QuoteCollateralV3, now_se
         Ok(dt) => now_secs <= dt.unix_timestamp().max(0) as u64,
         Err(_) => false,
     }
+}
+
+fn unique_cache_dir(base: &Path) -> Result<PathBuf> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let nanos = now.as_nanos();
+    let seq = CACHE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let pid = std::process::id();
+    let dir = base.join(format!("dcap-qvl-cache-{nanos:x}-{pid}-{seq}"));
+    fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
+    Ok(dir)
 }
 
 async fn get_collateral_cached(
@@ -141,8 +155,13 @@ pub async fn ecdsa_quote_verification_with_timing(
 ) -> Result<(Map<String, Value>, f64)> {
     let pccs_url = std::env::var("PCCS_URL").ok();
     let cache_dir = std::env::var("DCAP_QVL_CACHE_DIR").unwrap_or_else(|_| "dcap-qvl-cache".into());
+    let cache_dir = if cache_disabled() {
+        PathBuf::from(cache_dir)
+    } else {
+        unique_cache_dir(Path::new(&cache_dir))?
+    };
     let collateral_start = Instant::now();
-    let collateral = get_collateral_cached(pccs_url.as_deref(), quote, Path::new(&cache_dir))
+    let collateral = get_collateral_cached(pccs_url.as_deref(), quote, cache_dir.as_path())
         .await
         .context("get collateral")?;
     let collateral_ms = collateral_start.elapsed().as_secs_f64() * 1000.0;
