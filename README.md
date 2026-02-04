@@ -1,4 +1,4 @@
-﻿# TrustMee Trustee Artifact
+﻿# TrustMee Artifact
 
 This repository is an artifact for the paper submission "TrustMee: Self-Verifying Remote Attestation Evidence" to USENIX Security 2026.
 
