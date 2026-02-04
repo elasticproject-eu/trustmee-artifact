@@ -25,6 +25,11 @@ PAPER_FIGWIDTH = 4
 PAPER_FIGHEIGHT = 3
 PAPER_SUBPLOT = {"left": 0.18, "right": 0.94, "top": 0.96, "bottom": 0.16}
 PAPER_HEADROOM_RATIO = 0.28
+PAPER_NATIVE_LABEL = "native"
+PAPER_WASM_LABEL = "Wasm-based"
+PAPER_TEE_LABELS = {"snp": "SEV-SNP", "tdx": "TDX"}
+PAPER_NATIVE_COLOR = "#81c784"
+PAPER_WASM_COLOR = "#63b5f6"
 NUMERIC_LABEL_DELTA = 1
 
 
@@ -51,6 +56,34 @@ class BreakdownSeries:
     native_std: np.ndarray
     wasm_mean: np.ndarray
     wasm_std: np.ndarray
+
+
+def paper_tee_label(platform: str) -> str:
+    return PAPER_TEE_LABELS.get(platform.lower(), platform.upper())
+
+
+def paper_bar_labels(primary_labels: list[str]) -> list[str]:
+    labels = []
+    for primary in primary_labels:
+        labels.append(f"{primary}\n{PAPER_NATIVE_LABEL}")
+        labels.append(f"{primary}\n{PAPER_WASM_LABEL}")
+    return labels
+
+
+def paper_bar_colors(group_count: int) -> list[str]:
+    return [PAPER_NATIVE_COLOR, PAPER_WASM_COLOR] * group_count
+
+
+def paper_dense_tick_labelsize(multiline: bool = False) -> float:
+    base = plt.rcParams["font.size"]
+    drop = 3.2 if not multiline else 1
+    return max(base - drop, 6.0)
+
+
+def paper_dense_value_fontsize(stacked: bool = False) -> float:
+    base = plt.rcParams["font.size"]
+    drop = 2 if not stacked else 2.6
+    return max(base - drop + NUMERIC_LABEL_DELTA, 5.6)
 
 
 def read_json(path: Path) -> dict:
@@ -173,8 +206,8 @@ def set_rcparams(base_font: float, title_font: float, fonttype: int) -> None:
     })
 
 
-def apply_subplot_margins(fig: plt.Figure, default: dict, paper: bool) -> None:
-    if paper:
+def apply_subplot_margins(fig: plt.Figure, default: dict, separate: bool) -> None:
+    if separate:
         fig.subplots_adjust(**PAPER_SUBPLOT)
     else:
         fig.subplots_adjust(**default)
@@ -182,7 +215,9 @@ def apply_subplot_margins(fig: plt.Figure, default: dict, paper: bool) -> None:
 
 def format_value(mean: float, std: float, layout: str = "inline") -> str:
     if layout == "stacked":
-        return f"{mean:.2f}\n±{std:.2f}"
+        return f"{mean:.2f}\n+/- {std:.2f}"
+    if layout == "stacked_std":
+        return f"{mean:.2f}\n+/- {std:.2f}"
     return f"{mean:.2f} +/- {std:.2f}"
 
 
@@ -199,8 +234,13 @@ def bar_compare(
     pad_ratio: float = 0.04,
     value_layout: str = "inline",
     headroom_ratio: float | None = None,
+    value_fontsize: float | None = None,
+    xmargin: float | None = None,
+    xspacing: float = 1.0,
 ) -> None:
-    x = np.arange(len(labels))
+    is_stacked = value_layout == "stacked"
+    is_multiline = value_layout in {"stacked", "stacked_std"}
+    x = np.arange(len(labels)) * xspacing
     raw_max = float(np.max(mean + std))
     ax.bar(
         x,
@@ -223,7 +263,7 @@ def bar_compare(
     if show_values:
         if headroom_ratio is None:
             headroom = max(raw_max * 0.18, axis_max * 0.10, 1.2)
-            if value_layout == "stacked":
+            if is_multiline:
                 headroom = max(headroom, raw_max * 0.28, 2.0)
         else:
             headroom = max(raw_max * headroom_ratio, 1.2)
@@ -233,20 +273,23 @@ def bar_compare(
     ax.set_axisbelow(True)
     if show_values:
         # Add a bit of horizontal padding so edge labels don't touch the border.
-        ax.margins(x=0.12)
+        ax.margins(x=0.12 if xmargin is None else xmargin)
 
     if show_values:
-        offset = axis_max * pad_ratio * (0.7 if value_layout == "stacked" else 1.0)
+        offset = axis_max * pad_ratio * (0.7 if is_multiline else 1.0)
         offset = max(offset, axis_max * 0.01)
-        label_fs = max(
-            plt.rcParams["font.size"] - (2.2 if value_layout == "stacked" else 1.5) + NUMERIC_LABEL_DELTA,
-            6.5,
-        )
+        if value_fontsize is None:
+            label_fs = max(
+                plt.rcParams["font.size"] - (2.2 if is_multiline else 1.5) + NUMERIC_LABEL_DELTA,
+                6.5,
+            )
+        else:
+            label_fs = value_fontsize
         for xi, m, s in zip(x, mean, std):
             label = format_value(m, s, layout=value_layout)
             desired_y = m + s + offset
             cap_y = axis_max - max(headroom * 0.35, offset * 0.6)
-            if value_layout == "stacked":
+            if is_stacked:
                 top_pad = max(axis_max * 0.08, 1.5)
                 cap_y = min(cap_y, axis_max - top_pad)
             if desired_y <= cap_y:
@@ -254,7 +297,7 @@ def bar_compare(
                 va = "bottom"
             else:
                 y = cap_y
-                va = "top" if value_layout == "stacked" else "bottom"
+                va = "top" if is_stacked else "bottom"
             ax.text(
                 xi,
                 y,
@@ -264,6 +307,55 @@ def bar_compare(
                 fontsize=label_fs,
             )
 
+
+def build_paper_bars(
+    labels: list[str],
+    mean: np.ndarray,
+    std: np.ndarray,
+    fig_w: float,
+    fig_h: float,
+    show_values: bool,
+    ylabel: str,
+    title: str | None = None,
+    axis_max: float | None = None,
+    pad_ratio: float = 0.04,
+    value_layout: str = "inline",
+    separate: bool = False,
+    colors: list[str] | None = None,
+    tick_labelsize: float | None = None,
+    value_fontsize: float | None = None,
+    xmargin: float | None = None,
+    xspacing: float = 1.0,
+    margins: dict | None = None,
+) -> plt.Figure:
+    if colors is None:
+        colors = paper_bar_colors(len(labels) // 2)
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=300)
+    default_margins = {"left": 0.18, "right": 0.98, "top": 0.94, "bottom": 0.18}
+    apply_subplot_margins(fig, margins or default_margins, separate)
+    if axis_max is None:
+        axis_max = nice_limit(float(np.max(mean + std)), pad=5.0, step=10.0)
+    bar_compare(
+        ax,
+        labels,
+        mean,
+        std,
+        colors,
+        ylabel,
+        title,
+        show_values,
+        axis_max=axis_max,
+        pad_ratio=pad_ratio,
+        value_layout=value_layout,
+        headroom_ratio=PAPER_HEADROOM_RATIO if separate else None,
+        value_fontsize=value_fontsize,
+        xmargin=xmargin,
+        xspacing=xspacing,
+    )
+    if tick_labelsize is not None:
+        ax.tick_params(axis="x", labelsize=tick_labelsize, pad=2)
+    return fig
+
 def build_latency_pair_twopanel(
     platform_label: str,
     series: LatencySeries,
@@ -272,7 +364,7 @@ def build_latency_pair_twopanel(
     show_values: bool,
     shared_axis_max: bool = True,
     show_titles: bool = True,
-    paper: bool = False,
+    separate: bool = False,
 ) -> plt.Figure:
     labels = ["native\nTrustee AS", "Wasm-based\nAS"]
     colors = ["#81c784", "#63b5f6"]
@@ -283,7 +375,7 @@ def build_latency_pair_twopanel(
     apply_subplot_margins(
         fig,
         {"left": 0.10, "right": 0.98, "top": 0.86, "bottom": 0.22, "wspace": 0.38},
-        paper,
+        separate,
     )
 
     bar_compare(
@@ -296,7 +388,7 @@ def build_latency_pair_twopanel(
         f"(a) {platform_label}\nEnd-to-End Attestation Latency (mean +/- std)" if show_titles else None,
         show_values,
         axis_max=axis_max_e2e,
-        headroom_ratio=PAPER_HEADROOM_RATIO if paper else None,
+        headroom_ratio=PAPER_HEADROOM_RATIO if separate else None,
     )
     bar_compare(
         axes[1],
@@ -308,7 +400,7 @@ def build_latency_pair_twopanel(
         f"(b) {platform_label}\nVerification Time (mean +/- std)" if show_titles else None,
         show_values,
         axis_max=axis_max_ver,
-        headroom_ratio=PAPER_HEADROOM_RATIO if paper else None,
+        headroom_ratio=PAPER_HEADROOM_RATIO if separate else None,
     )
     return fig
 
@@ -320,7 +412,7 @@ def build_breakdown_twopanel(
     fig_h: float,
     show_values: bool,
     show_titles: bool = True,
-    paper: bool = False,
+    separate: bool = False,
 ) -> plt.Figure:
     colors = ["#81c784", "#63b5f6"]
     axis_max = nice_limit(float(max(
@@ -332,7 +424,7 @@ def build_breakdown_twopanel(
     apply_subplot_margins(
         fig,
         {"left": 0.10, "right": 0.98, "top": 0.86, "bottom": 0.22, "wspace": 0.38},
-        paper,
+        separate,
     )
 
     bar_compare(
@@ -347,7 +439,7 @@ def build_breakdown_twopanel(
         axis_max=axis_max,
         pad_ratio=0.03,
         value_layout="stacked",
-        headroom_ratio=PAPER_HEADROOM_RATIO if paper else None,
+        headroom_ratio=PAPER_HEADROOM_RATIO if separate else None,
     )
     axes[0].tick_params(axis="x", labelsize=max(plt.rcParams["font.size"] - 2.2, 6.2), pad=2)
     bar_compare(
@@ -362,7 +454,7 @@ def build_breakdown_twopanel(
         axis_max=axis_max,
         pad_ratio=0.03,
         value_layout="stacked",
-        headroom_ratio=PAPER_HEADROOM_RATIO if paper else None,
+        headroom_ratio=PAPER_HEADROOM_RATIO if separate else None,
     )
     axes[1].tick_params(axis="x", labelsize=max(plt.rcParams["font.size"] - 2.2, 6.2), pad=2)
     return fig
@@ -378,13 +470,13 @@ def build_single_latency(
     show_title: bool = True,
     value_layout: str = "inline",
     axis_max: float | None = None,
-    paper: bool = False,
+    separate: bool = False,
 ) -> plt.Figure:
     labels = ["native\nTrustee AS", "Wasm-based\nAS"]
     colors = ["#81c784", "#63b5f6"]
 
     fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=300)
-    apply_subplot_margins(fig, {"left": 0.18, "right": 0.98, "top": 0.94, "bottom": 0.18}, paper)
+    apply_subplot_margins(fig, {"left": 0.18, "right": 0.98, "top": 0.94, "bottom": 0.18}, separate)
     if axis_max is None:
         axis_max = nice_limit(float(np.max(mean + std)), pad=5.0, step=10.0)
     bar_compare(
@@ -398,7 +490,7 @@ def build_single_latency(
         show_values,
         axis_max=axis_max,
         value_layout=value_layout,
-        headroom_ratio=PAPER_HEADROOM_RATIO if paper else None,
+        headroom_ratio=PAPER_HEADROOM_RATIO if separate else None,
     )
     return fig
 
@@ -410,7 +502,7 @@ def build_resources_twopanel(
     fig_h: float,
     show_values: bool,
     show_titles: bool = True,
-    paper: bool = False,
+    separate: bool = False,
 ) -> plt.Figure:
     labels = ["native\nTrustee AS", "Wasm-based\nAS"]
     colors = ["#81c784", "#63b5f6"]
@@ -419,7 +511,7 @@ def build_resources_twopanel(
     apply_subplot_margins(
         fig,
         {"left": 0.10, "right": 0.98, "top": 0.86, "bottom": 0.22, "wspace": 0.38},
-        paper,
+        separate,
     )
 
     rss_mean_mb = resources.rss_mean / 1024.0
@@ -435,7 +527,7 @@ def build_resources_twopanel(
         show_values,
         axis_max=nice_limit(float(np.max(rss_mean_mb + rss_std_mb)), pad=2.0, step=10.0),
         pad_ratio=0.02,
-        headroom_ratio=PAPER_HEADROOM_RATIO if paper else None,
+        headroom_ratio=PAPER_HEADROOM_RATIO if separate else None,
     )
     bar_compare(
         axes[1],
@@ -448,7 +540,7 @@ def build_resources_twopanel(
         show_values,
         axis_max=nice_limit(float(np.max(resources.cpu_mean + resources.cpu_std)), pad=0.4, step=1.0),
         pad_ratio=0.08,
-        headroom_ratio=PAPER_HEADROOM_RATIO if paper else None,
+        headroom_ratio=PAPER_HEADROOM_RATIO if separate else None,
     )
     return fig
 
@@ -460,7 +552,7 @@ def build_breakdown_panel(
     show_values: bool,
     panel: str,
     show_title: bool = True,
-    paper: bool = False,
+    separate: bool = False,
 ) -> plt.Figure:
     colors = ["#81c784", "#63b5f6"]
     axis_max = nice_limit(float(max(
@@ -482,7 +574,7 @@ def build_breakdown_panel(
         raise ValueError(f"unknown breakdown panel: {panel}")
 
     fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=300)
-    apply_subplot_margins(fig, {"left": 0.18, "right": 0.98, "top": 0.88, "bottom": 0.24}, paper)
+    apply_subplot_margins(fig, {"left": 0.18, "right": 0.98, "top": 0.88, "bottom": 0.24}, separate)
     bar_compare(
         ax,
         breakdown.labels,
@@ -495,7 +587,7 @@ def build_breakdown_panel(
         axis_max=axis_max,
         pad_ratio=0.03,
         value_layout="stacked",
-        headroom_ratio=PAPER_HEADROOM_RATIO if paper else None,
+        headroom_ratio=PAPER_HEADROOM_RATIO if separate else None,
     )
     ax.tick_params(axis="x", labelsize=max(plt.rcParams["font.size"] - 2.2, 6.2), pad=2)
     return fig
@@ -509,13 +601,13 @@ def build_resources_panel(
     show_values: bool,
     panel: str,
     show_title: bool = True,
-    paper: bool = False,
+    separate: bool = False,
 ) -> plt.Figure:
     labels = ["native\nTrustee AS", "Wasm-based\nAS"]
     colors = ["#81c784", "#63b5f6"]
 
     fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=300)
-    apply_subplot_margins(fig, {"left": 0.18, "right": 0.98, "top": 0.88, "bottom": 0.22}, paper)
+    apply_subplot_margins(fig, {"left": 0.18, "right": 0.98, "top": 0.88, "bottom": 0.22}, separate)
 
     if panel == "rss":
         rss_mean_mb = resources.rss_mean / 1024.0
@@ -533,7 +625,7 @@ def build_resources_panel(
             show_values,
             axis_max=axis_max,
             pad_ratio=0.02,
-            headroom_ratio=PAPER_HEADROOM_RATIO if paper else None,
+            headroom_ratio=PAPER_HEADROOM_RATIO if separate else None,
         )
     elif panel == "cpu":
         title = f"(b) {platform_label}\nCPU usage during attestation"
@@ -549,7 +641,7 @@ def build_resources_panel(
             show_values,
             axis_max=axis_max,
             pad_ratio=0.08,
-            headroom_ratio=PAPER_HEADROOM_RATIO if paper else None,
+            headroom_ratio=PAPER_HEADROOM_RATIO if separate else None,
         )
     else:
         raise ValueError(f"unknown resources panel: {panel}")
@@ -576,7 +668,7 @@ def build_dumbbell_onecol(
     fig_h: float,
     show_values: bool,
     show_title: bool = True,
-    paper: bool = False,
+    separate: bool = False,
 ) -> plt.Figure:
     green = "#81c784"
     blue = "#63b5f6"
@@ -588,7 +680,7 @@ def build_dumbbell_onecol(
     wasm_std = np.array([series.e2e_std[1], series.ver_std[1]], dtype=float)
 
     fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=300)
-    apply_subplot_margins(fig, {"left": 0.33, "right": 0.98, "top": 0.82, "bottom": 0.34}, paper)
+    apply_subplot_margins(fig, {"left": 0.33, "right": 0.98, "top": 0.82, "bottom": 0.34}, separate)
 
     y = np.arange(len(metrics))[::-1]
     ax.set_yticks(y, metrics)
@@ -656,7 +748,7 @@ def build_bars_breakdown_onecol(
     fig_h: float,
     show_values: bool,
     show_title: bool = True,
-    paper: bool = False,
+    separate: bool = False,
 ) -> plt.Figure:
     from matplotlib.lines import Line2D
 
@@ -682,7 +774,7 @@ def build_bars_breakdown_onecol(
     x = np.arange(len(labels))
 
     fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=300)
-    apply_subplot_margins(fig, {"left": 0.20, "right": 0.98, "top": 0.88, "bottom": 0.30}, paper)
+    apply_subplot_margins(fig, {"left": 0.20, "right": 0.98, "top": 0.88, "bottom": 0.30}, separate)
 
     width = 0.62
 
@@ -792,11 +884,19 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--pdf-fonttype", type=int, choices=[3, 42], default=3)
     ap.add_argument("--no-values", action="store_true", help="Hide numeric labels.")
     ap.add_argument(
+        "--separate",
+        action="store_true",
+        help="Hide titles/captions and split two-panel evaluation figures.",
+    )
+    ap.add_argument(
         "--paper",
         action="store_true",
-        help="Paper mode: hide titles/captions and split two-panel evaluation figures.",
+        help="Paper mode: like --separate but with merged evaluation figures and paper labels.",
     )
-    return ap.parse_args()
+    args = ap.parse_args()
+    if args.paper and args.separate:
+        ap.error("--paper and --separate cannot be used together.")
+    return args
 
 
 def default_figheight(style: str) -> float:
@@ -822,7 +922,7 @@ def ensure_files(paths: list[Path], strict: bool, fig_number: int) -> bool:
     return False
 
 
-def generate_evaluation_figures(args: argparse.Namespace) -> int:
+def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
     results_dir = Path(args.results_dir)
     output_dir = Path(args.output_dir) if args.output_dir else results_dir
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -835,8 +935,573 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
 
     set_rcparams(args.font, args.titlefont, args.pdf_fonttype)
     show_values = not args.no_values
-    show_titles = not args.paper
-    savefig_kwargs = {"bbox_inches": "tight", "pad_inches": 0.02} if not args.paper else {}
+    savefig_kwargs: dict = {}
+
+    default_figs = list(range(21, 30))
+    fig_numbers = args.figures if args.figures else default_figs
+    for fig_number in fig_numbers:
+        if fig_number < 21 or fig_number > 29:
+            raise SystemExit("Evaluation preset supports figure numbers 21-29.")
+
+    use_default_width = abs(args.figwidth - DEFAULT_FIGWIDTH) < 1e-6
+    fig_w = PAPER_FIGWIDTH if use_default_width else args.figwidth
+    fig_h = PAPER_FIGHEIGHT if args.figheight is None else args.figheight
+    dense_tick = paper_dense_tick_labelsize(multiline=True)
+    dense_value = paper_dense_value_fontsize()
+    dense_xmargin = 0.06
+    dense_spacing = 1.22
+    breakdown_spacing = 1.6
+
+    snp_label = paper_tee_label("snp")
+    tdx_label = paper_tee_label("tdx")
+    snp_labels = paper_bar_labels([snp_label])
+    tdx_labels = paper_bar_labels([tdx_label])
+    snp_tdx_labels = paper_bar_labels([snp_label, tdx_label])
+
+    snp_platform_files = [
+        results_dir / "snp_native_latency.json",
+        results_dir / "snp_wasm_latency.json",
+        results_dir / "snp_native_verifier_time.json",
+        results_dir / "snp_wasm_verifier_time.json",
+    ]
+    tdx_platform_files = [
+        results_dir / "tdx_native_latency.json",
+        results_dir / "tdx_wasm_latency.json",
+        results_dir / "tdx_native_verifier_time.json",
+        results_dir / "tdx_wasm_verifier_time.json",
+    ]
+    snp_resources_files = [
+        results_dir / "snp_native_resources.json",
+        results_dir / "snp_wasm_resources.json",
+    ]
+    tdx_resources_files = [
+        results_dir / "tdx_native_resources.json",
+        results_dir / "tdx_wasm_resources.json",
+    ]
+    snp_breakdown_files = [
+        results_dir / "snp_native_step_breakdown.json",
+        results_dir / "snp_wasm_step_breakdown.json",
+    ]
+
+    requested = set(fig_numbers)
+    to_generate = {
+        "21a": 21 in requested,
+        "21b": 21 in requested,
+        "22a": 22 in requested,
+        "22b": 22 in requested,
+        "23": 23 in requested,
+        "24a": 24 in requested,
+        "24b": 24 in requested,
+        "25a": 25 in requested,
+        "25b": 25 in requested,
+        "26": 26 in requested,
+        "27a": 27 in requested,
+        "27b": 27 in requested,
+        "28": 28 in requested,
+        "29": 29 in requested,
+    }
+
+    generated = 0
+
+    def save_figure(fig: plt.Figure, name: str) -> None:
+        nonlocal generated
+        out_path = output_dir / f"{name}.{args.format}"
+        fig.savefig(out_path, **savefig_kwargs)
+        plt.close(fig)
+        print(f"Wrote: {out_path}")
+        generated += 1
+
+    def time_axis_max(mean: np.ndarray, std: np.ndarray, step: float = 10.0) -> float:
+        return nice_limit(float(np.max(mean + std)), pad=5.0, step=step)
+
+    def files_exist(paths: list[Path]) -> bool:
+        return all(path.is_file() for path in paths)
+
+    # Merge fig23 + fig25a (latency no cache).
+    if to_generate["23"] and to_generate["25a"]:
+        needed = [
+            results_dir / "snp_native_latency_no_cert.json",
+            results_dir / "snp_wasm_latency_no_cert.json",
+            *tdx_platform_files,
+        ]
+        if files_exist(needed):
+            snp_mean, snp_std = load_latency_pair(results_dir, "snp", "latency_no_cert")
+            tdx_series = load_platform(results_dir, "tdx")
+            mean = np.concatenate([snp_mean, tdx_series.e2e_mean])
+            std = np.concatenate([snp_std, tdx_series.e2e_std])
+            axis_max = time_axis_max(mean, std, step=10.0)
+            fig = build_paper_bars(
+                snp_tdx_labels,
+                mean,
+                std,
+                fig_w,
+                fig_h,
+                show_values,
+                "Time (ms)",
+                axis_max=axis_max,
+                separate=True,
+                tick_labelsize=dense_tick,
+                value_fontsize=dense_value,
+                xmargin=dense_xmargin,
+                value_layout="stacked_std",
+                xspacing=dense_spacing,
+            )
+            save_figure(fig, "fig23_fig25_latency_no_cache")
+            to_generate["23"] = False
+            to_generate["25a"] = False
+        elif args.strict:
+            ensure_files(needed, args.strict, 23)
+
+    # Merge fig21b + fig25b (verification cache).
+    if to_generate["21b"] and to_generate["25b"]:
+        needed = [*snp_platform_files, *tdx_platform_files]
+        if files_exist(needed):
+            snp_series = load_platform(results_dir, "snp")
+            tdx_series = load_platform(results_dir, "tdx")
+            mean = np.concatenate([snp_series.ver_mean, tdx_series.ver_mean])
+            std = np.concatenate([snp_series.ver_std, tdx_series.ver_std])
+            axis_max = time_axis_max(mean, std, step=5.0)
+            fig = build_paper_bars(
+                snp_tdx_labels,
+                mean,
+                std,
+                fig_w,
+                fig_h,
+                show_values,
+                "Time (ms)",
+                axis_max=axis_max,
+                separate=True,
+                tick_labelsize=dense_tick,
+                value_fontsize=dense_value,
+                xmargin=dense_xmargin,
+                value_layout="stacked_std",
+                xspacing=dense_spacing,
+            )
+            save_figure(fig, "fig21_fig25_verification_cache")
+            to_generate["21b"] = False
+            to_generate["25b"] = False
+        elif args.strict:
+            ensure_files(needed, args.strict, 21)
+
+    # Merge fig22a + fig22b (snp breakdown), keep separate panels too.
+    if to_generate["22a"] and to_generate["22b"]:
+        if files_exist(snp_breakdown_files):
+            breakdown = load_breakdown(results_dir, "snp")
+            primary = breakdown.labels
+            labels = [value for label in primary for value in (label, "")]
+            mean = np.column_stack([breakdown.native_mean, breakdown.wasm_mean]).reshape(-1)
+            std = np.column_stack([breakdown.native_std, breakdown.wasm_std]).reshape(-1)
+            axis_max = nice_limit(float(max(
+                np.max(breakdown.wasm_mean + breakdown.wasm_std),
+                np.max(breakdown.native_mean + breakdown.native_std),
+            )), pad=2.0, step=2.0)
+            tick_fs = paper_dense_tick_labelsize(multiline=True)
+            dense_stacked = paper_dense_value_fontsize(stacked=True)
+            fig = build_paper_bars(
+                labels,
+                mean,
+                std,
+                fig_w,
+                fig_h,
+                show_values,
+                "Time (ms)",
+                axis_max=axis_max,
+                pad_ratio=0.03,
+                value_layout="stacked",
+                separate=True,
+                colors=paper_bar_colors(len(primary)),
+                tick_labelsize=tick_fs,
+                value_fontsize=dense_stacked,
+                xmargin=0.05,
+                xspacing=breakdown_spacing,
+                margins={"left": 0.18, "right": 0.98, "top": 0.90, "bottom": 0.26},
+            )
+            from matplotlib.patches import Patch
+            ax = fig.axes[0]
+            legend_handles = [
+                Patch(facecolor=PAPER_NATIVE_COLOR, edgecolor="none", label=PAPER_NATIVE_LABEL),
+                Patch(facecolor=PAPER_WASM_COLOR, edgecolor="none", label=PAPER_WASM_LABEL),
+            ]
+            ax.legend(
+                handles=legend_handles,
+                frameon=False,
+                loc="upper left",
+                bbox_to_anchor=(0.0, 0.98),
+                borderaxespad=0.2,
+                fontsize=max(plt.rcParams["font.size"] - 2.2, 6.5),
+            )
+            # Center the step labels between each native/Wasm pair.
+            pair_positions = (np.arange(len(primary)) * 2) * breakdown_spacing + breakdown_spacing / 2
+            ax.set_xticks(pair_positions, primary)
+            save_figure(fig, "fig22_snp_verification_breakdown_merged")
+        elif args.strict:
+            ensure_files(snp_breakdown_files, args.strict, 22)
+
+    # Merge fig24a + fig27a (rss).
+    if to_generate["24a"] and to_generate["27a"]:
+        needed = [*snp_resources_files, *tdx_resources_files]
+        if files_exist(needed):
+            snp_resources = load_resources(results_dir, "snp")
+            tdx_resources = load_resources(results_dir, "tdx")
+            mean = np.concatenate([snp_resources.rss_mean, tdx_resources.rss_mean]) / 1024.0
+            std = np.concatenate([snp_resources.rss_std, tdx_resources.rss_std]) / 1024.0
+            axis_max = nice_limit(float(np.max(mean + std)), pad=2.0, step=10.0)
+            fig = build_paper_bars(
+                snp_tdx_labels,
+                mean,
+                std,
+                fig_w,
+                fig_h,
+                show_values,
+                "RSS (MB)",
+                axis_max=axis_max,
+                pad_ratio=0.02,
+                separate=True,
+                tick_labelsize=dense_tick,
+                value_fontsize=dense_value,
+                xmargin=dense_xmargin,
+                value_layout="stacked_std",
+                xspacing=dense_spacing,
+            )
+            save_figure(fig, "fig24_fig27_resources_rss")
+            to_generate["24a"] = False
+            to_generate["27a"] = False
+        elif args.strict:
+            ensure_files(needed, args.strict, 24)
+
+    # Merge fig24b + fig27b (cpu).
+    if to_generate["24b"] and to_generate["27b"]:
+        needed = [*snp_resources_files, *tdx_resources_files]
+        if files_exist(needed):
+            snp_resources = load_resources(results_dir, "snp")
+            tdx_resources = load_resources(results_dir, "tdx")
+            mean = np.concatenate([snp_resources.cpu_mean, tdx_resources.cpu_mean])
+            std = np.concatenate([snp_resources.cpu_std, tdx_resources.cpu_std])
+            axis_max = nice_limit(float(np.max(mean + std)), pad=0.4, step=1.0)
+            fig = build_paper_bars(
+                snp_tdx_labels,
+                mean,
+                std,
+                fig_w,
+                fig_h,
+                show_values,
+                "CPU (%)",
+                axis_max=axis_max,
+                pad_ratio=0.08,
+                separate=True,
+                tick_labelsize=dense_tick,
+                value_fontsize=dense_value,
+                xmargin=dense_xmargin,
+                value_layout="stacked_std",
+                xspacing=dense_spacing,
+            )
+            save_figure(fig, "fig24_fig27_resources_cpu")
+            to_generate["24b"] = False
+            to_generate["27b"] = False
+        elif args.strict:
+            ensure_files(needed, args.strict, 24)
+
+    # fig21 (latency cached tdx) - a panel
+    if to_generate["21a"] or to_generate["21b"]:
+        if ensure_files(snp_platform_files, args.strict, 21):
+            series = load_platform(results_dir, "snp")
+            axis_max_e2e, axis_max_ver = latency_pair_axis_max(series, shared_axis_max=True)
+            if to_generate["21a"]:
+                fig = build_paper_bars(
+                    snp_labels,
+                    series.e2e_mean,
+                    series.e2e_std,
+                    fig_w,
+                    fig_h,
+                    show_values,
+                    "Time (ms)",
+                    axis_max=axis_max_e2e,
+                    separate=True,
+                )
+                save_figure(fig, f"fig21_snp_latency_verification_a")
+            if to_generate["21b"]:
+                fig = build_paper_bars(
+                    snp_labels,
+                    series.ver_mean,
+                    series.ver_std,
+                    fig_w,
+                    fig_h,
+                    show_values,
+                    "Time (ms)",
+                    axis_max=axis_max_ver,
+                    separate=True,
+                )
+                save_figure(fig, f"fig21_snp_latency_verification_b")
+
+    # fig22 separate panels
+    if to_generate["22a"] or to_generate["22b"]:
+        if ensure_files(snp_breakdown_files, args.strict, 22):
+            breakdown = load_breakdown(results_dir, "snp")
+            primary = breakdown.labels
+            axis_max = nice_limit(float(max(
+                np.max(breakdown.wasm_mean + breakdown.wasm_std),
+                np.max(breakdown.native_mean + breakdown.native_std),
+            )), pad=2.0, step=2.0)
+            tick_fs = max(plt.rcParams["font.size"] - 2.2, 6.2)
+            if to_generate["22a"]:
+                labels = primary
+                fig = build_paper_bars(
+                    labels,
+                    breakdown.native_mean,
+                    breakdown.native_std,
+                    fig_w,
+                    fig_h,
+                    show_values,
+                    "Time (ms)",
+                    axis_max=axis_max,
+                    pad_ratio=0.03,
+                    value_layout="stacked",
+                    separate=True,
+                    colors=[PAPER_NATIVE_COLOR] * len(labels),
+                    tick_labelsize=tick_fs,
+                )
+                save_figure(fig, f"fig22_snp_verification_breakdown_a")
+            if to_generate["22b"]:
+                labels = primary
+                fig = build_paper_bars(
+                    labels,
+                    breakdown.wasm_mean,
+                    breakdown.wasm_std,
+                    fig_w,
+                    fig_h,
+                    show_values,
+                    "Time (ms)",
+                    axis_max=axis_max,
+                    pad_ratio=0.03,
+                    value_layout="stacked",
+                    separate=True,
+                    colors=[PAPER_WASM_COLOR] * len(labels),
+                    tick_labelsize=tick_fs,
+                )
+                save_figure(fig, f"fig22_snp_verification_breakdown_b")
+
+    # fig23 (latency no cache)
+    if to_generate["23"]:
+        needed = [
+            results_dir / "snp_native_latency_no_cert.json",
+            results_dir / "snp_wasm_latency_no_cert.json",
+        ]
+        if ensure_files(needed, args.strict, 23):
+            mean, std = load_latency_pair(results_dir, "snp", "latency_no_cert")
+            axis_max = time_axis_max(mean, std, step=10.0)
+            fig = build_paper_bars(
+                snp_labels,
+                mean,
+                std,
+                fig_w,
+                fig_h,
+                show_values,
+                "Time (ms)",
+                axis_max=axis_max,
+                separate=True,
+            )
+            save_figure(fig, f"fig23_snp_latency_no_cert")
+
+    # fig24 (rss/cpu)
+    if to_generate["24a"] or to_generate["24b"]:
+        if ensure_files(snp_resources_files, args.strict, 24):
+            resources = load_resources(results_dir, "snp")
+            if to_generate["24a"]:
+                rss_mean_mb = resources.rss_mean / 1024.0
+                rss_std_mb = resources.rss_std / 1024.0
+                axis_max = nice_limit(float(np.max(rss_mean_mb + rss_std_mb)), pad=2.0, step=10.0)
+                fig = build_paper_bars(
+                    snp_labels,
+                    rss_mean_mb,
+                    rss_std_mb,
+                    fig_w,
+                    fig_h,
+                    show_values,
+                    "RSS (MB)",
+                    axis_max=axis_max,
+                    pad_ratio=0.02,
+                    separate=True,
+                )
+                save_figure(fig, f"fig24_snp_resources_a")
+            if to_generate["24b"]:
+                axis_max = nice_limit(float(np.max(resources.cpu_mean + resources.cpu_std)), pad=0.4, step=1.0)
+                fig = build_paper_bars(
+                    snp_labels,
+                    resources.cpu_mean,
+                    resources.cpu_std,
+                    fig_w,
+                    fig_h,
+                    show_values,
+                    "CPU (%)",
+                    axis_max=axis_max,
+                    pad_ratio=0.08,
+                    separate=True,
+                )
+                save_figure(fig, f"fig24_snp_resources_b")
+
+    # fig25 (tdx latency/verification)
+    if to_generate["25a"] or to_generate["25b"]:
+        if ensure_files(tdx_platform_files, args.strict, 25):
+            series = load_platform(results_dir, "tdx")
+            axis_max_e2e, axis_max_ver = latency_pair_axis_max(series, shared_axis_max=False)
+            if to_generate["25a"]:
+                fig = build_paper_bars(
+                    tdx_labels,
+                    series.e2e_mean,
+                    series.e2e_std,
+                    fig_w,
+                    fig_h,
+                    show_values,
+                    "Time (ms)",
+                    axis_max=axis_max_e2e,
+                    separate=True,
+                )
+                save_figure(fig, f"fig25_tdx_latency_verification_a")
+            if to_generate["25b"]:
+                fig = build_paper_bars(
+                    tdx_labels,
+                    series.ver_mean,
+                    series.ver_std,
+                    fig_w,
+                    fig_h,
+                    show_values,
+                    "Time (ms)",
+                    axis_max=axis_max_ver,
+                    separate=True,
+                )
+                save_figure(fig, f"fig25_tdx_latency_verification_b")
+
+    # fig26 (verification modified tdx)
+    if to_generate["26"]:
+        native_path = results_dir / "tdx_native_verifier_time_dcap_qvl.json"
+        if not native_path.is_file():
+            native_path = results_dir / "tdx_native_verifier_time.json"
+        needed = [
+            native_path,
+            results_dir / "tdx_wasm_verifier_time.json",
+        ]
+        if ensure_files(needed, args.strict, 26):
+            native = load_verifier_time(native_path)
+            wasm = load_verifier_time(results_dir / "tdx_wasm_verifier_time.json")
+            mean = np.array([native[0], wasm[0]], dtype=float)
+            std = np.array([native[1], wasm[1]], dtype=float)
+            axis_max = time_axis_max(mean, std, step=10.0)
+            fig = build_paper_bars(
+                tdx_labels,
+                mean,
+                std,
+                fig_w,
+                fig_h,
+                show_values,
+                "Time (ms)",
+                axis_max=axis_max,
+                separate=True,
+            )
+            save_figure(fig, f"fig26_tdx_remote_verification")
+
+    # fig27 (tdx rss/cpu)
+    if to_generate["27a"] or to_generate["27b"]:
+        if ensure_files(tdx_resources_files, args.strict, 27):
+            resources = load_resources(results_dir, "tdx")
+            if to_generate["27a"]:
+                rss_mean_mb = resources.rss_mean / 1024.0
+                rss_std_mb = resources.rss_std / 1024.0
+                axis_max = nice_limit(float(np.max(rss_mean_mb + rss_std_mb)), pad=2.0, step=10.0)
+                fig = build_paper_bars(
+                    tdx_labels,
+                    rss_mean_mb,
+                    rss_std_mb,
+                    fig_w,
+                    fig_h,
+                    show_values,
+                    "RSS (MB)",
+                    axis_max=axis_max,
+                    pad_ratio=0.02,
+                    separate=True,
+                )
+                save_figure(fig, f"fig27_tdx_resources_a")
+            if to_generate["27b"]:
+                axis_max = nice_limit(float(np.max(resources.cpu_mean + resources.cpu_std)), pad=0.4, step=1.0)
+                fig = build_paper_bars(
+                    tdx_labels,
+                    resources.cpu_mean,
+                    resources.cpu_std,
+                    fig_w,
+                    fig_h,
+                    show_values,
+                    "CPU (%)",
+                    axis_max=axis_max,
+                    pad_ratio=0.08,
+                    separate=True,
+                )
+                save_figure(fig, f"fig27_tdx_resources_b")
+
+    # fig28 (latency modified tdx, cold)
+    if to_generate["28"]:
+        needed = [
+            results_dir / "tdx_native_latency_dcap_qvl_cold.json",
+            results_dir / "tdx_wasm_latency_dcap_qvl_cold.json",
+        ]
+        if ensure_files(needed, args.strict, 28):
+            mean, std = load_latency_pair(results_dir, "tdx", "latency_dcap_qvl_cold")
+            axis_max = time_axis_max(mean, std, step=10.0)
+            fig = build_paper_bars(
+                tdx_labels,
+                mean,
+                std,
+                fig_w,
+                fig_h,
+                show_values,
+                "Time (ms)",
+                axis_max=axis_max,
+                separate=True,
+            )
+            save_figure(fig, f"fig28_tdx_dcap_qvl_latency_cold")
+
+    # fig29 (latency modified tdx, warm)
+    if to_generate["29"]:
+        needed = [
+            results_dir / "tdx_native_latency_dcap_qvl_hot.json",
+            results_dir / "tdx_wasm_latency_dcap_qvl_hot.json",
+        ]
+        if ensure_files(needed, args.strict, 29):
+            mean, std = load_latency_pair(results_dir, "tdx", "latency_dcap_qvl_hot")
+            axis_max = time_axis_max(mean, std, step=10.0)
+            fig = build_paper_bars(
+                tdx_labels,
+                mean,
+                std,
+                fig_w,
+                fig_h,
+                show_values,
+                "Time (ms)",
+                axis_max=axis_max,
+                separate=True,
+            )
+            save_figure(fig, f"fig29_tdx_dcap_qvl_latency_hot")
+
+    if generated == 0:
+        print("[warn] no figures generated")
+    return 0
+
+
+def generate_evaluation_figures(args: argparse.Namespace) -> int:
+    if args.paper:
+        return generate_evaluation_figures_paper(args)
+    results_dir = Path(args.results_dir)
+    output_dir = Path(args.output_dir) if args.output_dir else results_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.output:
+        raise SystemExit("--output is only valid for --preset onecol.")
+
+    if matplotlib.__version__ != "3.10.3":
+        print(f"[warn] matplotlib=={matplotlib.__version__} (original metadata was v3.10.3)")
+
+    set_rcparams(args.font, args.titlefont, args.pdf_fonttype)
+    show_values = not args.no_values
+    show_titles = not args.separate
+    savefig_kwargs = {"bbox_inches": "tight", "pad_inches": 0.02} if not args.separate else {}
 
     default_figs = list(range(21, 30))
     fig_numbers = args.figures if args.figures else default_figs
@@ -849,14 +1514,14 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
     for fig_number in fig_numbers:
         fig = None
         out_path = None
-        if args.paper and args.figheight is None:
+        if args.separate and args.figheight is None:
             fig_h = PAPER_FIGHEIGHT
         else:
             fig_h = evaluation_figheight(fig_number, args.figheight)
         use_default_width = abs(args.figwidth - DEFAULT_FIGWIDTH) < 1e-6
-        split_panels = args.paper and fig_number in {21, 22, 24, 25, 27}
+        split_panels = args.separate and fig_number in {21, 22, 24, 25, 27}
         if use_default_width:
-            if args.paper:
+            if args.separate:
                 fig_w = PAPER_FIGWIDTH
             else:
                 fig_w = DEFAULT_FIGWIDTH if fig_number in {23, 26, 28, 29} else DEFAULT_EVAL_WIDE
@@ -873,7 +1538,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
             if not ensure_files(needed, args.strict, fig_number):
                 continue
             series = load_platform(results_dir, "snp")
-            if args.paper:
+            if args.separate:
                 axis_max_e2e, axis_max_ver = latency_pair_axis_max(series, shared_axis_max=True)
                 fig_a = build_single_latency(
                     "(a) AMD SEV-SNP\nEnd-to-End Attestation Latency (mean +/- std)",
@@ -884,7 +1549,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     show_values,
                     show_title=show_titles,
                     axis_max=axis_max_e2e,
-                    paper=args.paper,
+                    separate=args.separate,
                 )
                 out_path_a = output_dir / f"fig21_snp_latency_verification_a.{args.format}"
                 fig_a.savefig(out_path_a, **savefig_kwargs)
@@ -900,7 +1565,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     show_values,
                     show_title=show_titles,
                     axis_max=axis_max_ver,
-                    paper=args.paper,
+                    separate=args.separate,
                 )
                 out_path_b = output_dir / f"fig21_snp_latency_verification_b.{args.format}"
                 fig_b.savefig(out_path_b, **savefig_kwargs)
@@ -916,7 +1581,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 fig_h,
                 show_values,
                 show_titles=show_titles,
-                paper=args.paper,
+                separate=args.separate,
             )
             out_path = output_dir / f"fig21_snp_latency_verification.{args.format}"
         elif fig_number == 22:
@@ -927,7 +1592,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
             if not ensure_files(needed, args.strict, fig_number):
                 continue
             breakdown = load_breakdown(results_dir, "snp")
-            if args.paper:
+            if args.separate:
                 fig_a = build_breakdown_panel(
                     breakdown,
                     fig_w,
@@ -935,7 +1600,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     show_values,
                     panel="native",
                     show_title=show_titles,
-                    paper=args.paper,
+                    separate=args.separate,
                 )
                 out_path_a = output_dir / f"fig22_snp_verification_breakdown_a.{args.format}"
                 fig_a.savefig(out_path_a, **savefig_kwargs)
@@ -949,7 +1614,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     show_values,
                     panel="wasm",
                     show_title=show_titles,
-                    paper=args.paper,
+                    separate=args.separate,
                 )
                 out_path_b = output_dir / f"fig22_snp_verification_breakdown_b.{args.format}"
                 fig_b.savefig(out_path_b, **savefig_kwargs)
@@ -965,7 +1630,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 fig_h,
                 show_values,
                 show_titles=show_titles,
-                paper=args.paper,
+                separate=args.separate,
             )
             out_path = output_dir / f"fig22_snp_verification_breakdown.{args.format}"
         elif fig_number == 23:
@@ -977,7 +1642,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 continue
             mean, std = load_latency_pair(results_dir, "snp", "latency_no_cert")
             axis_max = None
-            if show_values and not args.paper:
+            if show_values and not args.separate:
                 raw_max = float(np.max(mean + std))
                 axis_max = nice_limit(raw_max, pad=5.0, step=10.0)
                 axis_max = max(axis_max, raw_max + max(raw_max * 0.35, 8.0))
@@ -989,7 +1654,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 fig_h,
                 show_values,
                 show_title=show_titles and False,
-                paper=args.paper,
+                separate=args.separate,
             )
             out_path = output_dir / f"fig23_snp_latency_no_cert.{args.format}"
         elif fig_number == 24:
@@ -1000,7 +1665,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
             if not ensure_files(needed, args.strict, fig_number):
                 continue
             resources = load_resources(results_dir, "snp")
-            if args.paper:
+            if args.separate:
                 fig_a = build_resources_panel(
                     "AMD SEV-SNP",
                     resources,
@@ -1009,7 +1674,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     show_values,
                     panel="rss",
                     show_title=show_titles,
-                    paper=args.paper,
+                    separate=args.separate,
                 )
                 out_path_a = output_dir / f"fig24_snp_resources_a.{args.format}"
                 fig_a.savefig(out_path_a, **savefig_kwargs)
@@ -1024,7 +1689,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     show_values,
                     panel="cpu",
                     show_title=show_titles,
-                    paper=args.paper,
+                    separate=args.separate,
                 )
                 out_path_b = output_dir / f"fig24_snp_resources_b.{args.format}"
                 fig_b.savefig(out_path_b, **savefig_kwargs)
@@ -1040,7 +1705,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 fig_h,
                 show_values,
                 show_titles=show_titles,
-                paper=args.paper,
+                separate=args.separate,
             )
             out_path = output_dir / f"fig24_snp_resources.{args.format}"
         elif fig_number == 25:
@@ -1053,7 +1718,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
             if not ensure_files(needed, args.strict, fig_number):
                 continue
             series = load_platform(results_dir, "tdx")
-            if args.paper:
+            if args.separate:
                 axis_max_e2e, axis_max_ver = latency_pair_axis_max(series, shared_axis_max=False)
                 fig_a = build_single_latency(
                     "(a) Intel TDX\nEnd-to-End Attestation Latency (mean +/- std)",
@@ -1064,7 +1729,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     show_values,
                     show_title=show_titles,
                     axis_max=axis_max_e2e,
-                    paper=args.paper,
+                    separate=args.separate,
                 )
                 out_path_a = output_dir / f"fig25_tdx_latency_verification_a.{args.format}"
                 fig_a.savefig(out_path_a, **savefig_kwargs)
@@ -1080,7 +1745,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     show_values,
                     show_title=show_titles,
                     axis_max=axis_max_ver,
-                    paper=args.paper,
+                    separate=args.separate,
                 )
                 out_path_b = output_dir / f"fig25_tdx_latency_verification_b.{args.format}"
                 fig_b.savefig(out_path_b, **savefig_kwargs)
@@ -1097,7 +1762,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 show_values,
                 shared_axis_max=False,
                 show_titles=show_titles,
-                paper=args.paper,
+                separate=args.separate,
             )
             out_path = output_dir / f"fig25_tdx_latency_verification.{args.format}"
         elif fig_number == 26:
@@ -1122,7 +1787,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 fig_h,
                 show_values,
                 show_title=show_titles and False,
-                paper=args.paper,
+                separate=args.separate,
             )
             out_path = output_dir / f"fig26_tdx_remote_verification.{args.format}"
         elif fig_number == 27:
@@ -1133,7 +1798,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
             if not ensure_files(needed, args.strict, fig_number):
                 continue
             resources = load_resources(results_dir, "tdx")
-            if args.paper:
+            if args.separate:
                 fig_a = build_resources_panel(
                     "Intel TDX",
                     resources,
@@ -1142,7 +1807,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     show_values,
                     panel="rss",
                     show_title=show_titles,
-                    paper=args.paper,
+                    separate=args.separate,
                 )
                 out_path_a = output_dir / f"fig27_tdx_resources_a.{args.format}"
                 fig_a.savefig(out_path_a, **savefig_kwargs)
@@ -1157,7 +1822,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     show_values,
                     panel="cpu",
                     show_title=show_titles,
-                    paper=args.paper,
+                    separate=args.separate,
                 )
                 out_path_b = output_dir / f"fig27_tdx_resources_b.{args.format}"
                 fig_b.savefig(out_path_b, **savefig_kwargs)
@@ -1173,7 +1838,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 fig_h,
                 show_values,
                 show_titles=show_titles,
-                paper=args.paper,
+                separate=args.separate,
             )
             out_path = output_dir / f"fig27_tdx_resources.{args.format}"
         elif fig_number == 28:
@@ -1192,7 +1857,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 fig_h,
                 show_values,
                 show_title=show_titles and False,
-                paper=args.paper,
+                separate=args.separate,
             )
             out_path = output_dir / f"fig28_tdx_dcap_qvl_latency_cold.{args.format}"
         elif fig_number == 29:
@@ -1211,7 +1876,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 fig_h,
                 show_values,
                 show_title=show_titles and False,
-                paper=args.paper,
+                separate=args.separate,
             )
             out_path = output_dir / f"fig29_tdx_dcap_qvl_latency_hot.{args.format}"
 
@@ -1240,15 +1905,16 @@ def generate_onecol_figures(args: argparse.Namespace) -> int:
     if matplotlib.__version__ != "3.10.3":
         print(f"[warn] matplotlib=={matplotlib.__version__} (original metadata was v3.10.3)")
 
+    layout_separate = args.separate or args.paper
     set_rcparams(args.font, args.titlefont, args.pdf_fonttype)
-    show_titles = not args.paper
-    savefig_kwargs = {"bbox_inches": "tight", "pad_inches": 0.02} if not args.paper else {}
+    show_titles = not layout_separate
+    savefig_kwargs = {"bbox_inches": "tight", "pad_inches": 0.02} if not layout_separate else {}
 
     for platform in platforms:
         series = load_platform(results_dir, platform)
         platform_label = platform.upper()
         for style in styles:
-            if args.paper and args.figheight is None:
+            if layout_separate and args.figheight is None:
                 fig_h = PAPER_FIGHEIGHT
             else:
                 fig_h = args.figheight if args.figheight is not None else default_figheight(style)
@@ -1260,14 +1926,14 @@ def generate_onecol_figures(args: argparse.Namespace) -> int:
                     fig_h,
                     show_values=not args.no_values,
                     show_title=show_titles,
-                    paper=args.paper,
+                    separate=layout_separate,
                 )
             else:
                 fig = build_bars_breakdown_onecol(
                     platform_label, series, args.figwidth, fig_h,
                     show_values=not args.no_values,
                     show_title=show_titles and False,
-                    paper=args.paper,
+                    separate=layout_separate,
                 )
 
             if args.output:

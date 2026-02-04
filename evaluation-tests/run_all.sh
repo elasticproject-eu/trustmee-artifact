@@ -132,7 +132,7 @@ run_latency() {
   python3 "$BIN_DIR/eval_latency.py" \
     --url "$AS_URL" \
     --tee "$tee" \
-    --runs 1 \
+    --runs 100 \
     --output "$out" \
     --result-log "$result_log" \
     "${dump_arg[@]}" \
@@ -261,7 +261,7 @@ run_resources() {
   shift 3
   python3 "$BIN_DIR/eval_resources.py" \
     --pid "$pid" \
-    --samples 1 \
+    --samples 100 \
     --interval 1 \
     --url "$AS_URL" \
     --tee "$tee" \
