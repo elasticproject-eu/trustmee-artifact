@@ -1178,14 +1178,14 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
             out_path = output_dir / f"fig27_tdx_resources.{args.format}"
         elif fig_number == 28:
             needed = [
-                results_dir / "tdx_native_latency_dcap_qvl_cache_off.json",
-                results_dir / "tdx_wasm_latency_dcap_qvl_cache_off.json",
+                results_dir / "tdx_native_latency_dcap_qvl_cold.json",
+                results_dir / "tdx_wasm_latency_dcap_qvl_cold.json",
             ]
             if not ensure_files(needed, args.strict, fig_number):
                 continue
-            mean, std = load_latency_pair(results_dir, "tdx", "latency_dcap_qvl_cache_off")
+            mean, std = load_latency_pair(results_dir, "tdx", "latency_dcap_qvl_cold")
             fig = build_single_latency(
-                "End-to-end latency of an Intel TDX remote attestation request\n(dcap-qvl cache disabled)",
+                "End-to-end latency of an Intel TDX remote attestation request\n(dcap-qvl cache cold start)",
                 mean,
                 std,
                 fig_w,
@@ -1194,17 +1194,17 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 show_title=show_titles and False,
                 paper=args.paper,
             )
-            out_path = output_dir / f"fig28_tdx_dcap_qvl_latency_cache_off.{args.format}"
+            out_path = output_dir / f"fig28_tdx_dcap_qvl_latency_cold.{args.format}"
         elif fig_number == 29:
             needed = [
-                results_dir / "tdx_native_latency_dcap_qvl_cache_on.json",
-                results_dir / "tdx_wasm_latency_dcap_qvl_cache_on.json",
+                results_dir / "tdx_native_latency_dcap_qvl_hot.json",
+                results_dir / "tdx_wasm_latency_dcap_qvl_hot.json",
             ]
             if not ensure_files(needed, args.strict, fig_number):
                 continue
-            mean, std = load_latency_pair(results_dir, "tdx", "latency_dcap_qvl_cache_on")
+            mean, std = load_latency_pair(results_dir, "tdx", "latency_dcap_qvl_hot")
             fig = build_single_latency(
-                "End-to-end latency of an Intel TDX remote attestation request\n(dcap-qvl cache enabled)",
+                "End-to-end latency of an Intel TDX remote attestation request\n(dcap-qvl cache hot start)",
                 mean,
                 std,
                 fig_w,
@@ -1213,7 +1213,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 show_title=show_titles and False,
                 paper=args.paper,
             )
-            out_path = output_dir / f"fig29_tdx_dcap_qvl_latency_cache_on.{args.format}"
+            out_path = output_dir / f"fig29_tdx_dcap_qvl_latency_hot.{args.format}"
 
         if fig is not None and out_path is not None:
             fig.savefig(out_path, **savefig_kwargs)

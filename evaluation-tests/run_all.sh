@@ -19,6 +19,8 @@ WASM_SIGNING_PUBLIC_KEY="${WASM_SIGNING_PUBLIC_KEY:-$WASM_SIGNING_DIR/wasm-signi
 WASM_SIGNING_SECRET_KEY="${WASM_SIGNING_SECRET_KEY:-$WASM_SIGNING_DIR/wasm-signing.secret}"
 SIGNED_COMPONENT_DIR="${SIGNED_COMPONENT_DIR:-$TMP_DIR/signed-components}"
 SNP_VCEK_DISABLE_CACHE="${SNP_VCEK_DISABLE_CACHE:-1}"
+TDX_DCAP_QVL_BATCHES="${TDX_DCAP_QVL_BATCHES:-20}"
+TDX_DCAP_QVL_BATCH_SIZE="${TDX_DCAP_QVL_BATCH_SIZE:-5}"
 
 if [[ -n "${NATIVE_OPENSSL_DIR:-}" ]]; then
   OPENSSL_LIB_DIR="$NATIVE_OPENSSL_DIR/lib64"
@@ -175,6 +177,83 @@ parse_snp_steps() {
     --output "$out"
 }
 
+append_batch_samples() {
+  local log_path="$1"
+  local cold_path="$2"
+  local hot_path="$3"
+  local batch_size="$4"
+  python3 - "$log_path" "$cold_path" "$hot_path" "$batch_size" <<'PY'
+import json
+import sys
+
+log_path, cold_path, hot_path, batch_size = sys.argv[1:5]
+batch_size = int(batch_size)
+
+first = None
+rest = []
+
+with open(log_path, encoding="utf-8") as f:
+    for line in f:
+        if not line.strip():
+            continue
+        entry = json.loads(line)
+        if entry.get("event") != "attestation" or not entry.get("ok"):
+            continue
+        elapsed = entry.get("elapsed_ms")
+        if elapsed is None:
+            continue
+        if first is None:
+            first = float(elapsed)
+        else:
+            rest.append(float(elapsed))
+
+if first is None:
+    raise SystemExit(f"no attestation samples in {log_path}")
+expected_rest = max(batch_size - 1, 0)
+if len(rest) != expected_rest:
+    raise SystemExit(
+        f"expected {expected_rest} hot samples in {log_path}, got {len(rest)}"
+    )
+
+with open(cold_path, "a", encoding="utf-8") as f:
+    f.write(f"{first}\n")
+with open(hot_path, "a", encoding="utf-8") as f:
+    for value in rest:
+        f.write(f"{value}\n")
+PY
+}
+
+write_latency_summary() {
+  local samples_path="$1"
+  local out_path="$2"
+  python3 - "$samples_path" "$out_path" <<'PY'
+import json
+import statistics
+import sys
+
+samples_path, out_path = sys.argv[1:3]
+with open(samples_path, encoding="utf-8") as f:
+    samples = [float(line.strip()) for line in f if line.strip()]
+if not samples:
+    raise SystemExit(f"no samples in {samples_path}")
+
+mean_ms = statistics.mean(samples)
+std_ms = statistics.pstdev(samples) if len(samples) > 1 else 0.0
+result = {
+    "runs": len(samples),
+    "mean_ms": mean_ms,
+    "std_ms": std_ms,
+    "min_ms": min(samples),
+    "max_ms": max(samples),
+}
+
+with open(out_path, "w", encoding="utf-8") as f:
+    json.dump(result, f, indent=2)
+    f.write("\n")
+print(json.dumps(result, indent=2))
+PY
+}
+
 run_resources() {
   local tee="$1"
   local pid="$2"
@@ -282,47 +361,77 @@ run_latency tdx native "$RESULTS_DIR/tdx_native_latency_dcap_qvl.json" \
 parse_verifier_timing "$NATIVE_LOG" "Tdx" "native" "$RESULTS_DIR/tdx_native_verifier_time_dcap_qvl.json"
 "$BIN_DIR/stop_restful_as.sh" native
 
-echo "== TDX dcap-qvl cache disabled (E2E) =="
-AS_VERIFICATION_TIMING_JSON=1 TDX_NATIVE_USE_DCAP_QVL=1 DCAP_QVL_DISABLE_CACHE=1 \
-  DCAP_QVL_CACHE_DIR="$WASM_CACHE_DIR" PORT="$PORT" TMP_DIR="$TMP_DIR" \
-  "$BIN_DIR/start_restful_as.sh" native
-PID="$(cat "$TMP_DIR/restful-as-native.pid")"
-run_latency tdx native "$RESULTS_DIR/tdx_native_latency_dcap_qvl_cache_off.json" \
-  --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
-"$BIN_DIR/stop_restful_as.sh" native
+echo "== TDX dcap-qvl cache (E2E cold/hot batches) =="
+if (( TDX_DCAP_QVL_BATCH_SIZE < 2 )); then
+  echo "TDX_DCAP_QVL_BATCH_SIZE must be >= 2 (got $TDX_DCAP_QVL_BATCH_SIZE)" >&2
+  exit 2
+fi
+TDX_DCAP_QVL_RUN_DIR="${TDX_DCAP_QVL_RUN_DIR:-$RESULTS_DIR/tdx_dcap_qvl_batches}"
+TDX_DCAP_QVL_CACHE_ROOT="${TDX_DCAP_QVL_CACHE_ROOT:-$TMP_DIR/tdx-dcap-qvl-batches}"
+rm -rf "$TDX_DCAP_QVL_CACHE_ROOT"
+mkdir -p "$TDX_DCAP_QVL_RUN_DIR" "$TDX_DCAP_QVL_CACHE_ROOT"
 
-AS_VERIFICATION_TIMING_JSON=1 DCAP_QVL_DISABLE_CACHE=1 PORT="$PORT" TMP_DIR="$TMP_DIR" \
-  WORK_DIR="$WASM_WORK_DIR" "$BIN_DIR/start_restful_as.sh" wasm
-PID="$(cat "$TMP_DIR/restful-as-wasm.pid")"
-TDX_COMPONENT_ID="$(
-  python3 "$BIN_DIR/register_component.py" \
-    --url "$COMPONENT_URL" \
-    --component "$TDX_COMPONENT_FOR_REG"
-)"
-run_latency tdx wasm "$RESULTS_DIR/tdx_wasm_latency_dcap_qvl_cache_off.json" --component-id "$TDX_COMPONENT_ID" \
-  --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
-"$BIN_DIR/stop_restful_as.sh" wasm
+NATIVE_COLD_SAMPLES="$TDX_DCAP_QVL_RUN_DIR/tdx_native_cold_samples.txt"
+NATIVE_HOT_SAMPLES="$TDX_DCAP_QVL_RUN_DIR/tdx_native_hot_samples.txt"
+WASM_COLD_SAMPLES="$TDX_DCAP_QVL_RUN_DIR/tdx_wasm_cold_samples.txt"
+WASM_HOT_SAMPLES="$TDX_DCAP_QVL_RUN_DIR/tdx_wasm_hot_samples.txt"
+: > "$NATIVE_COLD_SAMPLES"
+: > "$NATIVE_HOT_SAMPLES"
+: > "$WASM_COLD_SAMPLES"
+: > "$WASM_HOT_SAMPLES"
 
-echo "== TDX dcap-qvl cache enabled (E2E) =="
-AS_VERIFICATION_TIMING_JSON=1 TDX_NATIVE_USE_DCAP_QVL=1 DCAP_QVL_CACHE_DIR="$WASM_CACHE_DIR" \
-  PORT="$PORT" TMP_DIR="$TMP_DIR" \
-  "$BIN_DIR/start_restful_as.sh" native
-PID="$(cat "$TMP_DIR/restful-as-native.pid")"
-run_latency tdx native "$RESULTS_DIR/tdx_native_latency_dcap_qvl_cache_on.json" \
-  --warmup 1 --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
-"$BIN_DIR/stop_restful_as.sh" native
+for batch in $(seq 1 "$TDX_DCAP_QVL_BATCHES"); do
+  echo "-- batch $batch/$TDX_DCAP_QVL_BATCHES (native) --"
+  batch_dir="$TDX_DCAP_QVL_CACHE_ROOT/native-batch-$batch"
+  work_dir="$batch_dir/work"
+  cache_dir="$batch_dir/dcap-cache"
+  rm -rf "$batch_dir"
+  mkdir -p "$batch_dir"
+  AS_VERIFICATION_TIMING_JSON=1 TDX_NATIVE_USE_DCAP_QVL=1 DCAP_QVL_CACHE_DIR="$cache_dir" \
+    DCAP_QVL_DISABLE_CACHE=0 PORT="$PORT" TMP_DIR="$TMP_DIR" WORK_DIR="$work_dir" \
+    "$BIN_DIR/start_restful_as.sh" native
+  batch_log="$TDX_DCAP_QVL_RUN_DIR/tdx_native_batch_${batch}.jsonl"
+  python3 "$BIN_DIR/eval_latency.py" \
+    --url "$AS_URL" \
+    --tee tdx \
+    --runs "$TDX_DCAP_QVL_BATCH_SIZE" \
+    --result-log "$batch_log" \
+    --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
+  "$BIN_DIR/stop_restful_as.sh" native
+  append_batch_samples "$batch_log" "$NATIVE_COLD_SAMPLES" "$NATIVE_HOT_SAMPLES" "$TDX_DCAP_QVL_BATCH_SIZE"
+done
 
-AS_VERIFICATION_TIMING_JSON=1 PORT="$PORT" TMP_DIR="$TMP_DIR" \
-  WORK_DIR="$WASM_WORK_DIR" "$BIN_DIR/start_restful_as.sh" wasm
-PID="$(cat "$TMP_DIR/restful-as-wasm.pid")"
-TDX_COMPONENT_ID="$(
-  python3 "$BIN_DIR/register_component.py" \
-    --url "$COMPONENT_URL" \
-    --component "$TDX_COMPONENT_FOR_REG"
-)"
-run_latency tdx wasm "$RESULTS_DIR/tdx_wasm_latency_dcap_qvl_cache_on.json" --component-id "$TDX_COMPONENT_ID" \
-  --warmup 1 --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
-"$BIN_DIR/stop_restful_as.sh" wasm
+for batch in $(seq 1 "$TDX_DCAP_QVL_BATCHES"); do
+  echo "-- batch $batch/$TDX_DCAP_QVL_BATCHES (wasm) --"
+  batch_dir="$TDX_DCAP_QVL_CACHE_ROOT/wasm-batch-$batch"
+  work_dir="$batch_dir/work"
+  cache_dir="$batch_dir/dcap-cache"
+  rm -rf "$batch_dir"
+  mkdir -p "$batch_dir"
+  AS_VERIFICATION_TIMING_JSON=1 DCAP_QVL_CACHE_DIR="$cache_dir" \
+    DCAP_QVL_DISABLE_CACHE=0 PORT="$PORT" TMP_DIR="$TMP_DIR" WORK_DIR="$work_dir" \
+    "$BIN_DIR/start_restful_as.sh" wasm
+  TDX_COMPONENT_ID="$(
+    python3 "$BIN_DIR/register_component.py" \
+      --url "$COMPONENT_URL" \
+      --component "$TDX_COMPONENT_FOR_REG"
+  )"
+  batch_log="$TDX_DCAP_QVL_RUN_DIR/tdx_wasm_batch_${batch}.jsonl"
+  python3 "$BIN_DIR/eval_latency.py" \
+    --url "$AS_URL" \
+    --tee tdx \
+    --runs "$TDX_DCAP_QVL_BATCH_SIZE" \
+    --component-id "$TDX_COMPONENT_ID" \
+    --result-log "$batch_log" \
+    --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
+  "$BIN_DIR/stop_restful_as.sh" wasm
+  append_batch_samples "$batch_log" "$WASM_COLD_SAMPLES" "$WASM_HOT_SAMPLES" "$TDX_DCAP_QVL_BATCH_SIZE"
+done
+
+write_latency_summary "$NATIVE_COLD_SAMPLES" "$RESULTS_DIR/tdx_native_latency_dcap_qvl_cold.json"
+write_latency_summary "$NATIVE_HOT_SAMPLES" "$RESULTS_DIR/tdx_native_latency_dcap_qvl_hot.json"
+write_latency_summary "$WASM_COLD_SAMPLES" "$RESULTS_DIR/tdx_wasm_latency_dcap_qvl_cold.json"
+write_latency_summary "$WASM_HOT_SAMPLES" "$RESULTS_DIR/tdx_wasm_latency_dcap_qvl_hot.json"
 
 echo "== generate figures =="
 python3 "$BIN_DIR/plot_figures.py" --results-dir "$RESULTS_DIR" --preset evaluation --paper
