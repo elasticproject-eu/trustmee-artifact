@@ -460,6 +460,146 @@ def build_breakdown_twopanel(
     return fig
 
 
+def build_breakdown_stacked_paper(
+    breakdown: BreakdownSeries,
+    fig_w: float,
+    fig_h: float,
+    show_values: bool,
+    separate: bool = False,
+) -> plt.Figure:
+    labels = [PAPER_NATIVE_LABEL, PAPER_WASM_LABEL]
+    colors = [PAPER_NATIVE_COLOR, PAPER_WASM_COLOR]
+    hatches = ["////", "xxxx", "...."]
+    alphas = [0.92, 0.78, 0.64]
+
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=300)
+    apply_subplot_margins(fig, {"left": 0.18, "right": 0.98, "top": 0.92, "bottom": 0.26}, separate)
+
+    x = np.arange(len(labels))
+    width = 0.6
+
+    means = np.column_stack([breakdown.native_mean, breakdown.wasm_mean])
+    stds = np.column_stack([breakdown.native_std, breakdown.wasm_std])
+    totals = np.sum(means, axis=0)
+    raw_max = float(np.max(totals))
+    axis_max = nice_limit(raw_max, pad=2.0, step=2.0)
+    axis_max = max(axis_max, raw_max + max(raw_max * 0.28, 2.0))
+
+    bottoms = np.zeros(len(labels))
+    value_fs = max(plt.rcParams["font.size"] - 3.0 + NUMERIC_LABEL_DELTA, 5.6)
+    min_label_height = axis_max * 0.12
+
+    for idx in range(len(breakdown.labels)):
+        segment_mean = means[idx]
+        segment_std = stds[idx]
+        ax.bar(
+            x,
+            segment_mean,
+            width=width,
+            bottom=bottoms,
+            color=colors,
+            alpha=alphas[idx],
+            hatch=hatches[idx],
+            edgecolor="#2f2f2f",
+            linewidth=0.6,
+        )
+        if show_values:
+            for xi, mean, std, bottom in zip(x, segment_mean, segment_std, bottoms):
+                if mean <= 0 or mean < min_label_height:
+                    continue
+                ax.text(
+                    xi,
+                    bottom + mean / 2.0,
+                    format_value(mean, std, layout="stacked"),
+                    ha="center",
+                    va="center",
+                    fontsize=value_fs,
+                )
+        bottoms += segment_mean
+
+    ax.set_ylabel("Time (ms)")
+    ax.set_xticks(x, labels)
+    ax.set_ylim(0, axis_max)
+    ax.grid(axis="y", linestyle="--", linewidth=1.0, alpha=0.6)
+    ax.set_axisbelow(True)
+
+    from matplotlib.patches import Patch
+    legend_labels = [label.replace("\n", " ") for label in breakdown.labels]
+    legend_handles = [
+        Patch(facecolor="white", edgecolor="#2f2f2f", hatch=hatch, label=label)
+        for hatch, label in zip(hatches, legend_labels)
+    ][::-1]
+    ax.legend(
+        handles=legend_handles,
+        frameon=False,
+        loc="upper left",
+        bbox_to_anchor=(0.01, 0.98),
+        ncol=1,
+        columnspacing=0.8,
+        handletextpad=0.5,
+        borderaxespad=0.0,
+        fontsize=max(plt.rcParams["font.size"] - 2.2, 6.5),
+    )
+    return fig
+
+
+def build_breakdown_grouped_paper(
+    breakdown: BreakdownSeries,
+    fig_w: float,
+    fig_h: float,
+    show_values: bool,
+    separate: bool = False,
+) -> plt.Figure:
+    primary = breakdown.labels
+    labels = [value for label in primary for value in (label, "")]
+    mean = np.column_stack([breakdown.native_mean, breakdown.wasm_mean]).reshape(-1)
+    std = np.column_stack([breakdown.native_std, breakdown.wasm_std]).reshape(-1)
+    axis_max = nice_limit(float(max(
+        np.max(breakdown.wasm_mean + breakdown.wasm_std),
+        np.max(breakdown.native_mean + breakdown.native_std),
+    )), pad=2.0, step=2.0)
+    tick_fs = paper_dense_tick_labelsize(multiline=True)
+    dense_stacked = paper_dense_value_fontsize(stacked=True)
+    breakdown_spacing = 1.6
+    fig = build_paper_bars(
+        labels,
+        mean,
+        std,
+        fig_w,
+        fig_h,
+        show_values,
+        "Time (ms)",
+        axis_max=axis_max,
+        pad_ratio=0.03,
+        value_layout="stacked",
+        separate=True,
+        colors=paper_bar_colors(len(primary)),
+        tick_labelsize=tick_fs,
+        value_fontsize=dense_stacked,
+        xmargin=0.05,
+        xspacing=breakdown_spacing,
+        margins={"left": 0.18, "right": 0.98, "top": 0.90, "bottom": 0.26},
+    )
+    from matplotlib.patches import Patch
+    ax = fig.axes[0]
+    legend_handles = [
+        Patch(facecolor=PAPER_NATIVE_COLOR, edgecolor="none", label=PAPER_NATIVE_LABEL),
+        Patch(facecolor=PAPER_WASM_COLOR, edgecolor="none", label=PAPER_WASM_LABEL),
+    ]
+    ax.legend(
+        handles=legend_handles,
+        frameon=False,
+        loc="upper left",
+        bbox_to_anchor=(0.0, 0.98),
+        borderaxespad=0.2,
+        fontsize=max(plt.rcParams["font.size"] - 2.2, 6.5),
+    )
+    # Center the step labels between each native/Wasm pair.
+    pair_positions = (np.arange(len(primary)) * 2) * breakdown_spacing + breakdown_spacing / 2
+    ax.set_xticks(pair_positions, primary)
+    return fig
+
+
 def build_single_latency(
     title: str,
     mean: np.ndarray,
@@ -950,7 +1090,6 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
     dense_value = paper_dense_value_fontsize()
     dense_xmargin = 0.06
     dense_spacing = 1.22
-    breakdown_spacing = 1.6
 
     snp_label = paper_tee_label("snp")
     tdx_label = paper_tee_label("tdx")
@@ -1135,53 +1274,22 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
     if to_generate["22a"] and to_generate["22b"]:
         if files_exist(snp_breakdown_files):
             breakdown = load_breakdown(results_dir, "snp")
-            primary = breakdown.labels
-            labels = [value for label in primary for value in (label, "")]
-            mean = np.column_stack([breakdown.native_mean, breakdown.wasm_mean]).reshape(-1)
-            std = np.column_stack([breakdown.native_std, breakdown.wasm_std]).reshape(-1)
-            axis_max = nice_limit(float(max(
-                np.max(breakdown.wasm_mean + breakdown.wasm_std),
-                np.max(breakdown.native_mean + breakdown.native_std),
-            )), pad=2.0, step=2.0)
-            tick_fs = paper_dense_tick_labelsize(multiline=True)
-            dense_stacked = paper_dense_value_fontsize(stacked=True)
-            fig = build_paper_bars(
-                labels,
-                mean,
-                std,
+            fig = build_breakdown_stacked_paper(
+                breakdown,
+                fig_w,
+                fig_h,
+                show_values=False,
+                separate=True,
+            )
+            save_figure(fig, "snp_verification_breakdown_native_wasm")
+            fig = build_breakdown_grouped_paper(
+                breakdown,
                 fig_w,
                 fig_h,
                 show_values,
-                "Time (ms)",
-                axis_max=axis_max,
-                pad_ratio=0.03,
-                value_layout="stacked",
                 separate=True,
-                colors=paper_bar_colors(len(primary)),
-                tick_labelsize=tick_fs,
-                value_fontsize=dense_stacked,
-                xmargin=0.05,
-                xspacing=breakdown_spacing,
-                margins={"left": 0.18, "right": 0.98, "top": 0.90, "bottom": 0.26},
             )
-            from matplotlib.patches import Patch
-            ax = fig.axes[0]
-            legend_handles = [
-                Patch(facecolor=PAPER_NATIVE_COLOR, edgecolor="none", label=PAPER_NATIVE_LABEL),
-                Patch(facecolor=PAPER_WASM_COLOR, edgecolor="none", label=PAPER_WASM_LABEL),
-            ]
-            ax.legend(
-                handles=legend_handles,
-                frameon=False,
-                loc="upper left",
-                bbox_to_anchor=(0.0, 0.98),
-                borderaxespad=0.2,
-                fontsize=max(plt.rcParams["font.size"] - 2.2, 6.5),
-            )
-            # Center the step labels between each native/Wasm pair.
-            pair_positions = (np.arange(len(primary)) * 2) * breakdown_spacing + breakdown_spacing / 2
-            ax.set_xticks(pair_positions, primary)
-            save_figure(fig, "snp_verification_breakdown_native_wasm")
+            save_figure(fig, "snp_verification_breakdown_native_wasm_unstacked")
         elif args.strict:
             ensure_files(snp_breakdown_files, args.strict, 22)
 
