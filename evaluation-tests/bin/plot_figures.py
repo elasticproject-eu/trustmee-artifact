@@ -937,11 +937,11 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
     show_values = not args.no_values
     savefig_kwargs: dict = {}
 
-    default_figs = list(range(21, 30))
+    default_figs = list(range(21, 31))
     fig_numbers = args.figures if args.figures else default_figs
     for fig_number in fig_numbers:
-        if fig_number < 21 or fig_number > 29:
-            raise SystemExit("Evaluation preset supports figure numbers 21-29.")
+        if fig_number < 21 or fig_number > 30:
+            raise SystemExit("Evaluation preset supports figure numbers 21-30.")
 
     use_default_width = abs(args.figwidth - DEFAULT_FIGWIDTH) < 1e-6
     fig_w = PAPER_FIGWIDTH if use_default_width else args.figwidth
@@ -999,13 +999,19 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
         "27b": 27 in requested,
         "28": 28 in requested,
         "29": 29 in requested,
+        "30": 30 in requested,
     }
+    suppress_standalone_21a = True
+    suppress_standalone_22 = True
+    suppress_standalone_30 = True
 
+    eval_index = 0
     generated = 0
 
-    def save_figure(fig: plt.Figure, name: str) -> None:
-        nonlocal generated
-        out_path = output_dir / f"{name}.{args.format}"
+    def save_figure(fig: plt.Figure, desc: str) -> None:
+        nonlocal eval_index, generated
+        eval_index += 1
+        out_path = output_dir / f"eval{eval_index}_{desc}.{args.format}"
         fig.savefig(out_path, **savefig_kwargs)
         plt.close(fig)
         print(f"Wrote: {out_path}")
@@ -1046,11 +1052,47 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
                 value_layout="stacked_std",
                 xspacing=dense_spacing,
             )
-            save_figure(fig, "fig23_fig25_latency_no_cache")
+            save_figure(fig, "snp_tdx_with_collateral_latency")
             to_generate["23"] = False
             to_generate["25a"] = False
         elif args.strict:
             ensure_files(needed, args.strict, 23)
+
+    # Merge fig21a + fig30 (SNP latency + TDX latency without collateral).
+    if to_generate["21a"] and to_generate["30"]:
+        needed = [
+            results_dir / "snp_native_latency.json",
+            results_dir / "snp_wasm_latency.json",
+            results_dir / "tdx_native_latency_no_collateral.json",
+            results_dir / "tdx_wasm_latency_no_collateral.json",
+        ]
+        if files_exist(needed):
+            snp_series = load_platform(results_dir, "snp")
+            tdx_mean, tdx_std = load_latency_pair(results_dir, "tdx", "latency_no_collateral")
+            mean = np.concatenate([snp_series.e2e_mean, tdx_mean])
+            std = np.concatenate([snp_series.e2e_std, tdx_std])
+            axis_max = time_axis_max(mean, std, step=10.0)
+            fig = build_paper_bars(
+                snp_tdx_labels,
+                mean,
+                std,
+                fig_w,
+                fig_h,
+                show_values,
+                "Time (ms)",
+                axis_max=axis_max,
+                separate=True,
+                tick_labelsize=dense_tick,
+                value_fontsize=dense_value,
+                xmargin=dense_xmargin,
+                value_layout="stacked_std",
+                xspacing=dense_spacing,
+            )
+            save_figure(fig, "snp_tdx_latency_no_collateral")
+            to_generate["21a"] = False
+            to_generate["30"] = False
+        elif args.strict:
+            ensure_files(needed, args.strict, 21)
 
     # Merge fig21b + fig25b (verification cache).
     if to_generate["21b"] and to_generate["25b"]:
@@ -1077,13 +1119,13 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
                 value_layout="stacked_std",
                 xspacing=dense_spacing,
             )
-            save_figure(fig, "fig21_fig25_verification_cache")
+            save_figure(fig, "snp_tdx_verification_time")
             to_generate["21b"] = False
             to_generate["25b"] = False
         elif args.strict:
             ensure_files(needed, args.strict, 21)
 
-    # Merge fig22a + fig22b (snp breakdown), keep separate panels too.
+    # Merge fig22a + fig22b (snp breakdown).
     if to_generate["22a"] and to_generate["22b"]:
         if files_exist(snp_breakdown_files):
             breakdown = load_breakdown(results_dir, "snp")
@@ -1133,7 +1175,7 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
             # Center the step labels between each native/Wasm pair.
             pair_positions = (np.arange(len(primary)) * 2) * breakdown_spacing + breakdown_spacing / 2
             ax.set_xticks(pair_positions, primary)
-            save_figure(fig, "fig22_snp_verification_breakdown_merged")
+            save_figure(fig, "snp_verification_breakdown_native_wasm")
         elif args.strict:
             ensure_files(snp_breakdown_files, args.strict, 22)
 
@@ -1163,7 +1205,7 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
                 value_layout="stacked_std",
                 xspacing=dense_spacing,
             )
-            save_figure(fig, "fig24_fig27_resources_rss")
+            save_figure(fig, "snp_tdx_resources_rss")
             to_generate["24a"] = False
             to_generate["27a"] = False
         elif args.strict:
@@ -1195,7 +1237,7 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
                 value_layout="stacked_std",
                 xspacing=dense_spacing,
             )
-            save_figure(fig, "fig24_fig27_resources_cpu")
+            save_figure(fig, "snp_tdx_resources_cpu")
             to_generate["24b"] = False
             to_generate["27b"] = False
         elif args.strict:
@@ -1206,7 +1248,7 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
         if ensure_files(snp_platform_files, args.strict, 21):
             series = load_platform(results_dir, "snp")
             axis_max_e2e, axis_max_ver = latency_pair_axis_max(series, shared_axis_max=True)
-            if to_generate["21a"]:
+            if to_generate["21a"] and not suppress_standalone_21a:
                 fig = build_paper_bars(
                     snp_labels,
                     series.e2e_mean,
@@ -1218,7 +1260,7 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
                     axis_max=axis_max_e2e,
                     separate=True,
                 )
-                save_figure(fig, f"fig21_snp_latency_verification_a")
+                save_figure(fig, "snp_latency_native_wasm")
             if to_generate["21b"]:
                 fig = build_paper_bars(
                     snp_labels,
@@ -1231,10 +1273,10 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
                     axis_max=axis_max_ver,
                     separate=True,
                 )
-                save_figure(fig, f"fig21_snp_latency_verification_b")
+                save_figure(fig, "snp_verification_time_native_wasm")
 
     # fig22 separate panels
-    if to_generate["22a"] or to_generate["22b"]:
+    if (to_generate["22a"] or to_generate["22b"]) and not suppress_standalone_22:
         if ensure_files(snp_breakdown_files, args.strict, 22):
             breakdown = load_breakdown(results_dir, "snp")
             primary = breakdown.labels
@@ -1260,7 +1302,7 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
                     colors=[PAPER_NATIVE_COLOR] * len(labels),
                     tick_labelsize=tick_fs,
                 )
-                save_figure(fig, f"fig22_snp_verification_breakdown_a")
+                save_figure(fig, "snp_verification_breakdown_native")
             if to_generate["22b"]:
                 labels = primary
                 fig = build_paper_bars(
@@ -1278,7 +1320,7 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
                     colors=[PAPER_WASM_COLOR] * len(labels),
                     tick_labelsize=tick_fs,
                 )
-                save_figure(fig, f"fig22_snp_verification_breakdown_b")
+                save_figure(fig, "snp_verification_breakdown_wasm")
 
     # fig23 (latency no cache)
     if to_generate["23"]:
@@ -1300,7 +1342,7 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
                 axis_max=axis_max,
                 separate=True,
             )
-            save_figure(fig, f"fig23_snp_latency_no_cert")
+            save_figure(fig, "snp_no_cert_latency")
 
     # fig24 (rss/cpu)
     if to_generate["24a"] or to_generate["24b"]:
@@ -1322,7 +1364,7 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
                     pad_ratio=0.02,
                     separate=True,
                 )
-                save_figure(fig, f"fig24_snp_resources_a")
+                save_figure(fig, "snp_resources_rss")
             if to_generate["24b"]:
                 axis_max = nice_limit(float(np.max(resources.cpu_mean + resources.cpu_std)), pad=0.4, step=1.0)
                 fig = build_paper_bars(
@@ -1337,7 +1379,7 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
                     pad_ratio=0.08,
                     separate=True,
                 )
-                save_figure(fig, f"fig24_snp_resources_b")
+                save_figure(fig, "snp_resources_cpu")
 
     # fig25 (tdx latency/verification)
     if to_generate["25a"] or to_generate["25b"]:
@@ -1356,7 +1398,7 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
                     axis_max=axis_max_e2e,
                     separate=True,
                 )
-                save_figure(fig, f"fig25_tdx_latency_verification_a")
+                save_figure(fig, "tdx_latency_native_wasm")
             if to_generate["25b"]:
                 fig = build_paper_bars(
                     tdx_labels,
@@ -1369,7 +1411,7 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
                     axis_max=axis_max_ver,
                     separate=True,
                 )
-                save_figure(fig, f"fig25_tdx_latency_verification_b")
+                save_figure(fig, "tdx_verification_time_native_wasm")
 
     # fig26 (verification modified tdx)
     if to_generate["26"]:
@@ -1397,7 +1439,7 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
                 axis_max=axis_max,
                 separate=True,
             )
-            save_figure(fig, f"fig26_tdx_remote_verification")
+            save_figure(fig, "tdx_modified_dcap_verification_time")
 
     # fig27 (tdx rss/cpu)
     if to_generate["27a"] or to_generate["27b"]:
@@ -1419,7 +1461,7 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
                     pad_ratio=0.02,
                     separate=True,
                 )
-                save_figure(fig, f"fig27_tdx_resources_a")
+                save_figure(fig, "tdx_resources_rss")
             if to_generate["27b"]:
                 axis_max = nice_limit(float(np.max(resources.cpu_mean + resources.cpu_std)), pad=0.4, step=1.0)
                 fig = build_paper_bars(
@@ -1434,7 +1476,7 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
                     pad_ratio=0.08,
                     separate=True,
                 )
-                save_figure(fig, f"fig27_tdx_resources_b")
+                save_figure(fig, "tdx_resources_cpu")
 
     # fig28 (latency modified tdx, cold)
     if to_generate["28"]:
@@ -1456,7 +1498,7 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
                 axis_max=axis_max,
                 separate=True,
             )
-            save_figure(fig, f"fig28_tdx_dcap_qvl_latency_cold")
+            save_figure(fig, "tdx_modified_dcap_latency_cold")
 
     # fig29 (latency modified tdx, warm)
     if to_generate["29"]:
@@ -1478,7 +1520,29 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
                 axis_max=axis_max,
                 separate=True,
             )
-            save_figure(fig, f"fig29_tdx_dcap_qvl_latency_hot")
+            save_figure(fig, "tdx_modified_dcap_latency_hot")
+
+    # fig30 (latency excluding collateral fetch)
+    if to_generate["30"] and not suppress_standalone_30:
+        needed = [
+            results_dir / "tdx_native_latency_no_collateral.json",
+            results_dir / "tdx_wasm_latency_no_collateral.json",
+        ]
+        if ensure_files(needed, args.strict, 30):
+            mean, std = load_latency_pair(results_dir, "tdx", "latency_no_collateral")
+            axis_max = time_axis_max(mean, std, step=10.0)
+            fig = build_paper_bars(
+                tdx_labels,
+                mean,
+                std,
+                fig_w,
+                fig_h,
+                show_values,
+                "Time (ms)",
+                axis_max=axis_max,
+                separate=True,
+            )
+            save_figure(fig, "tdx_latency_no_collateral")
 
     if generated == 0:
         print("[warn] no figures generated")
@@ -1503,17 +1567,27 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
     show_titles = not args.separate
     savefig_kwargs = {"bbox_inches": "tight", "pad_inches": 0.02} if not args.separate else {}
 
-    default_figs = list(range(21, 30))
+    default_figs = list(range(21, 31))
     fig_numbers = args.figures if args.figures else default_figs
     for fig_number in fig_numbers:
-        if fig_number < 21 or fig_number > 29:
-            raise SystemExit("Evaluation preset supports figure numbers 21-29.")
+        if fig_number < 21 or fig_number > 30:
+            raise SystemExit("Evaluation preset supports figure numbers 21-30.")
 
+    eval_index = 0
     generated = 0
+
+    def save_eval(fig: plt.Figure, desc: str) -> None:
+        nonlocal eval_index, generated
+        eval_index += 1
+        out_path = output_dir / f"eval{eval_index}_{desc}.{args.format}"
+        fig.savefig(out_path, **savefig_kwargs)
+        plt.close(fig)
+        print(f"Wrote: {out_path}")
+        generated += 1
 
     for fig_number in fig_numbers:
         fig = None
-        out_path = None
+        desc = None
         if args.separate and args.figheight is None:
             fig_h = PAPER_FIGHEIGHT
         else:
@@ -1524,7 +1598,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
             if args.separate:
                 fig_w = PAPER_FIGWIDTH
             else:
-                fig_w = DEFAULT_FIGWIDTH if fig_number in {23, 26, 28, 29} else DEFAULT_EVAL_WIDE
+                fig_w = DEFAULT_FIGWIDTH if fig_number in {23, 26, 28, 29, 30} else DEFAULT_EVAL_WIDE
         else:
             fig_w = args.figwidth
 
@@ -1551,10 +1625,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     axis_max=axis_max_e2e,
                     separate=args.separate,
                 )
-                out_path_a = output_dir / f"fig21_snp_latency_verification_a.{args.format}"
-                fig_a.savefig(out_path_a, **savefig_kwargs)
-                plt.close(fig_a)
-                print(f"Wrote: {out_path_a}")
+                save_eval(fig_a, "snp_latency_native_wasm")
 
                 fig_b = build_single_latency(
                     "(b) AMD SEV-SNP\nVerification Time (mean +/- std)",
@@ -1567,11 +1638,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     axis_max=axis_max_ver,
                     separate=args.separate,
                 )
-                out_path_b = output_dir / f"fig21_snp_latency_verification_b.{args.format}"
-                fig_b.savefig(out_path_b, **savefig_kwargs)
-                plt.close(fig_b)
-                print(f"Wrote: {out_path_b}")
-                generated += 2
+                save_eval(fig_b, "snp_verification_time_native_wasm")
                 continue
 
             fig = build_latency_pair_twopanel(
@@ -1583,7 +1650,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 show_titles=show_titles,
                 separate=args.separate,
             )
-            out_path = output_dir / f"fig21_snp_latency_verification.{args.format}"
+            desc = "snp_latency_verification_native_wasm"
         elif fig_number == 22:
             needed = [
                 results_dir / "snp_native_step_breakdown.json",
@@ -1602,10 +1669,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     show_title=show_titles,
                     separate=args.separate,
                 )
-                out_path_a = output_dir / f"fig22_snp_verification_breakdown_a.{args.format}"
-                fig_a.savefig(out_path_a, **savefig_kwargs)
-                plt.close(fig_a)
-                print(f"Wrote: {out_path_a}")
+                save_eval(fig_a, "snp_verification_breakdown_native")
 
                 fig_b = build_breakdown_panel(
                     breakdown,
@@ -1616,11 +1680,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     show_title=show_titles,
                     separate=args.separate,
                 )
-                out_path_b = output_dir / f"fig22_snp_verification_breakdown_b.{args.format}"
-                fig_b.savefig(out_path_b, **savefig_kwargs)
-                plt.close(fig_b)
-                print(f"Wrote: {out_path_b}")
-                generated += 2
+                save_eval(fig_b, "snp_verification_breakdown_wasm")
                 continue
 
             fig = build_breakdown_twopanel(
@@ -1632,7 +1692,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 show_titles=show_titles,
                 separate=args.separate,
             )
-            out_path = output_dir / f"fig22_snp_verification_breakdown.{args.format}"
+            desc = "snp_verification_breakdown_native_wasm"
         elif fig_number == 23:
             needed = [
                 results_dir / "snp_native_latency_no_cert.json",
@@ -1656,7 +1716,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 show_title=show_titles and False,
                 separate=args.separate,
             )
-            out_path = output_dir / f"fig23_snp_latency_no_cert.{args.format}"
+            desc = "snp_no_cert_latency"
         elif fig_number == 24:
             needed = [
                 results_dir / "snp_native_resources.json",
@@ -1676,10 +1736,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     show_title=show_titles,
                     separate=args.separate,
                 )
-                out_path_a = output_dir / f"fig24_snp_resources_a.{args.format}"
-                fig_a.savefig(out_path_a, **savefig_kwargs)
-                plt.close(fig_a)
-                print(f"Wrote: {out_path_a}")
+                save_eval(fig_a, "snp_resources_rss")
 
                 fig_b = build_resources_panel(
                     "AMD SEV-SNP",
@@ -1691,11 +1748,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     show_title=show_titles,
                     separate=args.separate,
                 )
-                out_path_b = output_dir / f"fig24_snp_resources_b.{args.format}"
-                fig_b.savefig(out_path_b, **savefig_kwargs)
-                plt.close(fig_b)
-                print(f"Wrote: {out_path_b}")
-                generated += 2
+                save_eval(fig_b, "snp_resources_cpu")
                 continue
 
             fig = build_resources_twopanel(
@@ -1707,7 +1760,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 show_titles=show_titles,
                 separate=args.separate,
             )
-            out_path = output_dir / f"fig24_snp_resources.{args.format}"
+            desc = "snp_resources_rss_cpu"
         elif fig_number == 25:
             needed = [
                 results_dir / "tdx_native_latency.json",
@@ -1731,10 +1784,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     axis_max=axis_max_e2e,
                     separate=args.separate,
                 )
-                out_path_a = output_dir / f"fig25_tdx_latency_verification_a.{args.format}"
-                fig_a.savefig(out_path_a, **savefig_kwargs)
-                plt.close(fig_a)
-                print(f"Wrote: {out_path_a}")
+                save_eval(fig_a, "tdx_latency_native_wasm")
 
                 fig_b = build_single_latency(
                     "(b) Intel TDX\nVerification Time (mean +/- std)",
@@ -1747,11 +1797,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     axis_max=axis_max_ver,
                     separate=args.separate,
                 )
-                out_path_b = output_dir / f"fig25_tdx_latency_verification_b.{args.format}"
-                fig_b.savefig(out_path_b, **savefig_kwargs)
-                plt.close(fig_b)
-                print(f"Wrote: {out_path_b}")
-                generated += 2
+                save_eval(fig_b, "tdx_verification_time_native_wasm")
                 continue
 
             fig = build_latency_pair_twopanel(
@@ -1764,7 +1810,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 show_titles=show_titles,
                 separate=args.separate,
             )
-            out_path = output_dir / f"fig25_tdx_latency_verification.{args.format}"
+            desc = "tdx_latency_verification_native_wasm"
         elif fig_number == 26:
             native_path = results_dir / "tdx_native_verifier_time_dcap_qvl.json"
             if not native_path.is_file():
@@ -1789,7 +1835,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 show_title=show_titles and False,
                 separate=args.separate,
             )
-            out_path = output_dir / f"fig26_tdx_remote_verification.{args.format}"
+            desc = "tdx_modified_dcap_verification_time"
         elif fig_number == 27:
             needed = [
                 results_dir / "tdx_native_resources.json",
@@ -1809,10 +1855,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     show_title=show_titles,
                     separate=args.separate,
                 )
-                out_path_a = output_dir / f"fig27_tdx_resources_a.{args.format}"
-                fig_a.savefig(out_path_a, **savefig_kwargs)
-                plt.close(fig_a)
-                print(f"Wrote: {out_path_a}")
+                save_eval(fig_a, "tdx_resources_rss")
 
                 fig_b = build_resources_panel(
                     "Intel TDX",
@@ -1824,11 +1867,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                     show_title=show_titles,
                     separate=args.separate,
                 )
-                out_path_b = output_dir / f"fig27_tdx_resources_b.{args.format}"
-                fig_b.savefig(out_path_b, **savefig_kwargs)
-                plt.close(fig_b)
-                print(f"Wrote: {out_path_b}")
-                generated += 2
+                save_eval(fig_b, "tdx_resources_cpu")
                 continue
 
             fig = build_resources_twopanel(
@@ -1840,7 +1879,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 show_titles=show_titles,
                 separate=args.separate,
             )
-            out_path = output_dir / f"fig27_tdx_resources.{args.format}"
+            desc = "tdx_resources_rss_cpu"
         elif fig_number == 28:
             needed = [
                 results_dir / "tdx_native_latency_dcap_qvl_cold.json",
@@ -1859,7 +1898,7 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 show_title=show_titles and False,
                 separate=args.separate,
             )
-            out_path = output_dir / f"fig28_tdx_dcap_qvl_latency_cold.{args.format}"
+            desc = "tdx_modified_dcap_latency_cold"
         elif fig_number == 29:
             needed = [
                 results_dir / "tdx_native_latency_dcap_qvl_hot.json",
@@ -1878,13 +1917,29 @@ def generate_evaluation_figures(args: argparse.Namespace) -> int:
                 show_title=show_titles and False,
                 separate=args.separate,
             )
-            out_path = output_dir / f"fig29_tdx_dcap_qvl_latency_hot.{args.format}"
+            desc = "tdx_modified_dcap_latency_hot"
+        elif fig_number == 30:
+            needed = [
+                results_dir / "tdx_native_latency_no_collateral.json",
+                results_dir / "tdx_wasm_latency_no_collateral.json",
+            ]
+            if not ensure_files(needed, args.strict, fig_number):
+                continue
+            mean, std = load_latency_pair(results_dir, "tdx", "latency_no_collateral")
+            fig = build_single_latency(
+                "End-to-end latency of an Intel TDX remote attestation request\n(collateral fetch excluded)",
+                mean,
+                std,
+                fig_w,
+                fig_h,
+                show_values,
+                show_title=show_titles and False,
+                separate=args.separate,
+            )
+            desc = "tdx_latency_no_collateral"
 
-        if fig is not None and out_path is not None:
-            fig.savefig(out_path, **savefig_kwargs)
-            plt.close(fig)
-            print(f"Wrote: {out_path}")
-            generated += 1
+        if fig is not None and desc is not None:
+            save_eval(fig, desc)
 
     if generated == 0:
         print("[warn] no figures generated")

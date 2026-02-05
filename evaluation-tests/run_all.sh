@@ -254,6 +254,90 @@ print(json.dumps(result, indent=2))
 PY
 }
 
+write_latency_no_collateral() {
+  local attestation_log="$1"
+  local as_log="$2"
+  local tee="$3"
+  local mode="$4"
+  local out_path="$5"
+  python3 - "$attestation_log" "$as_log" "$tee" "$mode" "$out_path" <<'PY'
+import json
+import statistics
+import sys
+
+attestation_log, as_log, tee, mode, out_path = sys.argv[1:6]
+
+def load_attestation_samples(path: str) -> list[float]:
+    samples = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if record.get("event") != "attestation":
+                continue
+            if not record.get("ok"):
+                continue
+            elapsed = record.get("elapsed_ms")
+            if elapsed is None:
+                continue
+            samples.append(float(elapsed))
+    return samples
+
+def load_collateral_samples(path: str, tee: str, mode: str) -> list[float]:
+    samples = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if record.get("event") != "as_tdx_collateral_timing":
+                continue
+            if tee and record.get("tee") != tee:
+                continue
+            if mode and record.get("mode") != mode:
+                continue
+            ms = record.get("ms")
+            if ms is None:
+                continue
+            samples.append(float(ms))
+    return samples
+
+e2e = load_attestation_samples(attestation_log)
+collateral = load_collateral_samples(as_log, tee, mode)
+
+if not e2e:
+    raise SystemExit(f"no attestation samples in {attestation_log}")
+if len(collateral) != len(e2e):
+    raise SystemExit(
+        f"expected {len(e2e)} collateral samples in {as_log}, got {len(collateral)}"
+    )
+
+adjusted = [max(e - c, 0.0) for e, c in zip(e2e, collateral)]
+mean_ms = statistics.mean(adjusted)
+std_ms = statistics.pstdev(adjusted) if len(adjusted) > 1 else 0.0
+result = {
+    "runs": len(adjusted),
+    "mean_ms": mean_ms,
+    "std_ms": std_ms,
+    "min_ms": min(adjusted),
+    "max_ms": max(adjusted),
+}
+
+with open(out_path, "w", encoding="utf-8") as f:
+    json.dump(result, f, indent=2)
+    f.write("\n")
+print(json.dumps(result, indent=2))
+PY
+}
+
 run_resources() {
   local tee="$1"
   local pid="$2"
@@ -325,6 +409,9 @@ run_latency tdx native "$RESULTS_DIR/tdx_native_latency.json" \
   --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
 parse_verifier_timing "$NATIVE_LOG" "Tdx" "native" "$RESULTS_DIR/tdx_native_verifier_time.json"
 parse_collateral_timing "$NATIVE_LOG" "Tdx" "native" "$RESULTS_DIR/tdx_native_collateral_time.json"
+TDX_NATIVE_ATTESTATION_LOG="$ATTESTATION_LOG_DIR/tdx_native_latency_attestation.jsonl"
+write_latency_no_collateral "$TDX_NATIVE_ATTESTATION_LOG" "$NATIVE_LOG" "Tdx" "native" \
+  "$RESULTS_DIR/tdx_native_latency_no_collateral.json"
 run_resources tdx "$PID" "$RESULTS_DIR/tdx_native_resources.json"
 "$BIN_DIR/stop_restful_as.sh" native
 
@@ -348,6 +435,9 @@ run_latency tdx wasm "$RESULTS_DIR/tdx_wasm_latency.json" --component-id "$TDX_C
   --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
 parse_verifier_timing "$WASM_LOG" "Tdx" "wasm" "$RESULTS_DIR/tdx_wasm_verifier_time.json"
 parse_collateral_timing "$WASM_LOG" "Tdx" "wasm" "$RESULTS_DIR/tdx_wasm_collateral_time.json"
+TDX_WASM_ATTESTATION_LOG="$ATTESTATION_LOG_DIR/tdx_wasm_latency_attestation.jsonl"
+write_latency_no_collateral "$TDX_WASM_ATTESTATION_LOG" "$WASM_LOG" "Tdx" "wasm" \
+  "$RESULTS_DIR/tdx_wasm_latency_no_collateral.json"
 run_resources tdx "$PID" "$RESULTS_DIR/tdx_wasm_resources.json" --component-id "$TDX_COMPONENT_ID"
 "$BIN_DIR/stop_restful_as.sh" wasm
 
