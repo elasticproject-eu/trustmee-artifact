@@ -1004,6 +1004,12 @@ def generate_evaluation_figures_paper(args: argparse.Namespace) -> int:
     suppress_standalone_21a = True
     suppress_standalone_22 = True
     suppress_standalone_30 = True
+    suppress_paper_resources = True
+    if suppress_paper_resources:
+        to_generate["24a"] = False
+        to_generate["24b"] = False
+        to_generate["27a"] = False
+        to_generate["27b"] = False
 
     eval_index = 0
     generated = 0

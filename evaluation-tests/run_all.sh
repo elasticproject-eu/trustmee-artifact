@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec bash "$0" "$@"
+fi
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -21,6 +24,14 @@ SIGNED_COMPONENT_DIR="${SIGNED_COMPONENT_DIR:-$TMP_DIR/signed-components}"
 SNP_VCEK_DISABLE_CACHE="${SNP_VCEK_DISABLE_CACHE:-1}"
 TDX_DCAP_QVL_BATCHES="${TDX_DCAP_QVL_BATCHES:-20}"
 TDX_DCAP_QVL_BATCH_SIZE="${TDX_DCAP_QVL_BATCH_SIZE:-5}"
+TDX_REQUEST_INTERVAL="${TDX_REQUEST_INTERVAL:-2}"
+TDX_REQUEST_MAX_RETRIES="${TDX_REQUEST_MAX_RETRIES:-8}"
+TDX_REQUEST_RETRY_INITIAL="${TDX_REQUEST_RETRY_INITIAL:-4}"
+TDX_REQUEST_RETRY_BACKOFF="${TDX_REQUEST_RETRY_BACKOFF:-1.5}"
+TDX_DCAP_QVL_RETRY_MAX="${TDX_DCAP_QVL_RETRY_MAX:-5}"
+TDX_DCAP_QVL_RETRY_INITIAL_SECS="${TDX_DCAP_QVL_RETRY_INITIAL_SECS:-3}"
+TDX_DCAP_QVL_RETRY_BACKOFF="${TDX_DCAP_QVL_RETRY_BACKOFF:-1.5}"
+TDX_DCAP_QVL_REQUEST_INTERVAL_SECS="${TDX_DCAP_QVL_REQUEST_INTERVAL_SECS:-2}"
 
 if [[ -n "${NATIVE_OPENSSL_DIR:-}" ]]; then
   OPENSSL_LIB_DIR="$NATIVE_OPENSSL_DIR/lib64"
@@ -35,6 +46,10 @@ fi
 mkdir -p "$RESULTS_DIR" "$ATTESTATION_LOG_DIR" "$TMP_DIR"
 
 export SNP_VCEK_DISABLE_CACHE
+export TDX_DCAP_QVL_RETRY_MAX
+export TDX_DCAP_QVL_RETRY_INITIAL_SECS
+export TDX_DCAP_QVL_RETRY_BACKOFF
+export TDX_DCAP_QVL_REQUEST_INTERVAL_SECS
 
 write_system_info() {
   local out="$1"
@@ -345,7 +360,7 @@ run_resources() {
   shift 3
   python3 "$BIN_DIR/eval_resources.py" \
     --pid "$pid" \
-    --samples 100 \
+    --samples 1 \
     --interval 1 \
     --url "$AS_URL" \
     --tee "$tee" \
@@ -363,16 +378,22 @@ if [[ "$WASM_SIGNATURE_ENFORCE" == "1" ]]; then
 fi
 
 echo "== SNP native =="
-SNP_STEP_TIMING_JSON=1 SNP_TIMING_MODE=native AS_VERIFICATION_TIMING_JSON=1 \
+env -u SNP_VCEK_DISABLE_CACHE \
+  SNP_STEP_TIMING_JSON=1 SNP_TIMING_MODE=native AS_VERIFICATION_TIMING_JSON=1 \
   PORT="$PORT" TMP_DIR="$TMP_DIR" "$BIN_DIR/start_restful_as.sh" native
 NATIVE_LOG="$TMP_DIR/restful-as-native.log"
 PID="$(cat "$TMP_DIR/restful-as-native.pid")"
 run_latency snp native "$RESULTS_DIR/snp_native_latency.json"
 parse_verifier_timing "$NATIVE_LOG" "Snp" "native" "$RESULTS_DIR/snp_native_verifier_time.json"
 parse_snp_steps "$NATIVE_LOG" "native" "$RESULTS_DIR/snp_native_step_breakdown.json"
+run_resources snp "$PID" "$RESULTS_DIR/snp_native_resources.json"
+"$BIN_DIR/stop_restful_as.sh" native
+
+echo "== SNP native (no cert, cache disabled) =="
+SNP_VCEK_DISABLE_CACHE=1 SNP_STEP_TIMING_JSON=1 SNP_TIMING_MODE=native AS_VERIFICATION_TIMING_JSON=1 \
+  PORT="$PORT" TMP_DIR="$TMP_DIR" "$BIN_DIR/start_restful_as.sh" native
 run_latency snp native "$RESULTS_DIR/snp_native_latency_no_cert.json" \
   --no-cert-chain --interval 5 --max-retries 10 --retry-initial 2 --retry-backoff 1.5
-run_resources snp "$PID" "$RESULTS_DIR/snp_native_resources.json"
 "$BIN_DIR/stop_restful_as.sh" native
 
 echo "== SNP wasm =="
@@ -406,7 +427,10 @@ AS_VERIFICATION_TIMING_JSON=1 DCAP_QVL_DISABLE_CACHE=1 PORT="$PORT" TMP_DIR="$TM
 NATIVE_LOG="$TMP_DIR/restful-as-native.log"
 PID="$(cat "$TMP_DIR/restful-as-native.pid")"
 run_latency tdx native "$RESULTS_DIR/tdx_native_latency.json" \
-  --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
+  --timeout 180 --interval "$TDX_REQUEST_INTERVAL" \
+  --max-retries "$TDX_REQUEST_MAX_RETRIES" \
+  --retry-initial "$TDX_REQUEST_RETRY_INITIAL" \
+  --retry-backoff "$TDX_REQUEST_RETRY_BACKOFF"
 parse_verifier_timing "$NATIVE_LOG" "Tdx" "native" "$RESULTS_DIR/tdx_native_verifier_time.json"
 parse_collateral_timing "$NATIVE_LOG" "Tdx" "native" "$RESULTS_DIR/tdx_native_collateral_time.json"
 TDX_NATIVE_ATTESTATION_LOG="$ATTESTATION_LOG_DIR/tdx_native_latency_attestation.jsonl"
@@ -432,7 +456,10 @@ TDX_COMPONENT_ID="$(
     --component "$TDX_COMPONENT_FOR_REG"
 )"
 run_latency tdx wasm "$RESULTS_DIR/tdx_wasm_latency.json" --component-id "$TDX_COMPONENT_ID" \
-  --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
+  --timeout 180 --interval "$TDX_REQUEST_INTERVAL" \
+  --max-retries "$TDX_REQUEST_MAX_RETRIES" \
+  --retry-initial "$TDX_REQUEST_RETRY_INITIAL" \
+  --retry-backoff "$TDX_REQUEST_RETRY_BACKOFF"
 parse_verifier_timing "$WASM_LOG" "Tdx" "wasm" "$RESULTS_DIR/tdx_wasm_verifier_time.json"
 parse_collateral_timing "$WASM_LOG" "Tdx" "wasm" "$RESULTS_DIR/tdx_wasm_collateral_time.json"
 TDX_WASM_ATTESTATION_LOG="$ATTESTATION_LOG_DIR/tdx_wasm_latency_attestation.jsonl"
@@ -447,7 +474,10 @@ AS_VERIFICATION_TIMING_JSON=1 TDX_NATIVE_USE_DCAP_QVL=1 DCAP_QVL_CACHE_DIR="$WAS
 NATIVE_LOG="$TMP_DIR/restful-as-native.log"
 PID="$(cat "$TMP_DIR/restful-as-native.pid")"
 run_latency tdx native "$RESULTS_DIR/tdx_native_latency_dcap_qvl.json" \
-  --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
+  --timeout 180 --interval "$TDX_REQUEST_INTERVAL" \
+  --max-retries "$TDX_REQUEST_MAX_RETRIES" \
+  --retry-initial "$TDX_REQUEST_RETRY_INITIAL" \
+  --retry-backoff "$TDX_REQUEST_RETRY_BACKOFF"
 parse_verifier_timing "$NATIVE_LOG" "Tdx" "native" "$RESULTS_DIR/tdx_native_verifier_time_dcap_qvl.json"
 "$BIN_DIR/stop_restful_as.sh" native
 
@@ -486,7 +516,10 @@ for batch in $(seq 1 "$TDX_DCAP_QVL_BATCHES"); do
     --tee tdx \
     --runs "$TDX_DCAP_QVL_BATCH_SIZE" \
     --result-log "$batch_log" \
-    --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
+    --timeout 180 --interval "$TDX_REQUEST_INTERVAL" \
+    --max-retries "$TDX_REQUEST_MAX_RETRIES" \
+    --retry-initial "$TDX_REQUEST_RETRY_INITIAL" \
+    --retry-backoff "$TDX_REQUEST_RETRY_BACKOFF"
   "$BIN_DIR/stop_restful_as.sh" native
   append_batch_samples "$batch_log" "$NATIVE_COLD_SAMPLES" "$NATIVE_HOT_SAMPLES" "$TDX_DCAP_QVL_BATCH_SIZE"
 done
@@ -513,7 +546,10 @@ for batch in $(seq 1 "$TDX_DCAP_QVL_BATCHES"); do
     --runs "$TDX_DCAP_QVL_BATCH_SIZE" \
     --component-id "$TDX_COMPONENT_ID" \
     --result-log "$batch_log" \
-    --timeout 180 --max-retries 5 --retry-initial 2 --retry-backoff 1.5
+    --timeout 180 --interval "$TDX_REQUEST_INTERVAL" \
+    --max-retries "$TDX_REQUEST_MAX_RETRIES" \
+    --retry-initial "$TDX_REQUEST_RETRY_INITIAL" \
+    --retry-backoff "$TDX_REQUEST_RETRY_BACKOFF"
   "$BIN_DIR/stop_restful_as.sh" wasm
   append_batch_samples "$batch_log" "$WASM_COLD_SAMPLES" "$WASM_HOT_SAMPLES" "$TDX_DCAP_QVL_BATCH_SIZE"
 done

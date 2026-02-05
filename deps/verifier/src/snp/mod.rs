@@ -106,6 +106,10 @@ fn init_cache_manager() -> MokaManager {
     MokaManager::new(MokaCacheBuilder::new(1024).build())
 }
 
+fn vcek_cache_disabled() -> bool {
+    env::var("SNP_VCEK_DISABLE_CACHE").is_ok()
+}
+
 fn timing_enabled() -> bool {
     match env::var("SNP_STEP_TIMING_JSON") {
         Ok(v) => matches!(
@@ -137,6 +141,10 @@ impl Snp {
     }
 
     pub fn build_vcek_client(&self) -> reqwest_middleware::ClientWithMiddleware {
+        if vcek_cache_disabled() {
+            return ClientBuilder::new(reqwest::Client::new()).build();
+        }
+
         let client_options = HttpCacheOptions {
             cache_status_headers: true,
             ..Default::default()

@@ -4,7 +4,10 @@ use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::{Duration, Instant, SystemTime};
+use tokio::sync::Mutex;
+use tokio::time::sleep;
 
 const DEFAULT_PCS_URL: &str = "https://api.trustedservices.intel.com";
 
@@ -68,6 +71,95 @@ fn cached_collateral_is_fresh(collateral: &::dcap_qvl::QuoteCollateralV3, now_se
     }
 }
 
+struct RetrySettings {
+    max_retries: u32,
+    initial_delay: Duration,
+    backoff: f64,
+}
+
+fn env_u64(name: &str, default: u64) -> u64 {
+    std::env::var(name)
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(default)
+}
+
+fn env_f64(name: &str, default: f64) -> f64 {
+    std::env::var(name)
+        .ok()
+        .and_then(|v| v.parse::<f64>().ok())
+        .filter(|v| v.is_finite())
+        .unwrap_or(default)
+}
+
+fn collateral_retry_settings() -> RetrySettings {
+    let max_retries = env_u64("TDX_DCAP_QVL_RETRY_MAX", 0) as u32;
+    let initial_delay =
+        Duration::from_secs_f64(env_f64("TDX_DCAP_QVL_RETRY_INITIAL_SECS", 0.0).max(0.0));
+    let backoff = env_f64("TDX_DCAP_QVL_RETRY_BACKOFF", 1.0).max(1.0);
+    RetrySettings {
+        max_retries,
+        initial_delay,
+        backoff,
+    }
+}
+
+fn collateral_min_interval() -> Duration {
+    Duration::from_secs_f64(
+        env_f64("TDX_DCAP_QVL_REQUEST_INTERVAL_SECS", 0.0).max(0.0),
+    )
+}
+
+static LAST_COLLATERAL_FETCH: OnceLock<Mutex<Instant>> = OnceLock::new();
+
+async fn throttle_collateral_requests(min_interval: Duration) {
+    if min_interval == Duration::ZERO {
+        return;
+    }
+    let initial = Instant::now()
+        .checked_sub(min_interval)
+        .unwrap_or_else(Instant::now);
+    let lock = LAST_COLLATERAL_FETCH.get_or_init(|| Mutex::new(initial));
+    let now = Instant::now();
+    let mut last = lock.lock().await;
+    let next_allowed = (*last + min_interval).max(now);
+    let wait = next_allowed.saturating_duration_since(now);
+    *last = next_allowed;
+    drop(last);
+    if wait != Duration::ZERO {
+        sleep(wait).await;
+    }
+}
+
+async fn get_collateral_with_backoff(
+    pccs_url: &str,
+    quote: &[u8],
+) -> Result<::dcap_qvl::QuoteCollateralV3> {
+    let settings = collateral_retry_settings();
+    let min_interval = collateral_min_interval();
+    let mut attempt = 0u32;
+    let mut delay = settings.initial_delay;
+
+    loop {
+        throttle_collateral_requests(min_interval).await;
+        match ::dcap_qvl::collateral::get_collateral(pccs_url, quote).await {
+            Ok(collateral) => return Ok(collateral),
+            Err(err) => {
+                if attempt >= settings.max_retries {
+                    return Err(err).context("get collateral");
+                }
+                attempt += 1;
+                if delay != Duration::ZERO {
+                    sleep(delay).await;
+                }
+                if settings.backoff > 1.0 {
+                    delay = Duration::from_secs_f64(delay.as_secs_f64() * settings.backoff);
+                }
+            }
+        }
+    }
+}
+
 async fn get_collateral_cached(
     pccs_url: Option<&str>,
     quote: &[u8],
@@ -78,7 +170,7 @@ async fn get_collateral_cached(
         .filter(|s| !s.is_empty())
         .unwrap_or(DEFAULT_PCS_URL);
     if cache_disabled() {
-        return ::dcap_qvl::collateral::get_collateral(pccs_url, quote).await;
+        return get_collateral_with_backoff(pccs_url, quote).await;
     }
 
     let quote_obj = ::dcap_qvl::quote::Quote::parse(quote).context("parse quote")?;
@@ -95,7 +187,7 @@ async fn get_collateral_cached(
         }
     }
 
-    let collateral = ::dcap_qvl::collateral::get_collateral(pccs_url, quote).await?;
+    let collateral = get_collateral_with_backoff(pccs_url, quote).await?;
     write_cache(&cache_path, &collateral)?;
     Ok(collateral)
 }
