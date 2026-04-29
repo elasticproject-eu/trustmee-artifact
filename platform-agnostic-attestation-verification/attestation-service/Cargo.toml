@@ -1,0 +1,92 @@
+[package]
+name = "attestation-service"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["grpc-bin", "rvps-grpc"]
+all-verifier = ["verifier/all-verifier"]
+tdx-verifier = ["verifier/tdx-verifier"]
+# Paper-evaluation opt-in: enables native TDX verification via dcap-qvl.
+tdx-verifier-dcap-qvl = ["verifier/tdx-verifier-dcap-qvl"]
+sgx-verifier = ["verifier/sgx-verifier"]
+# Paper-evaluation opt-in: enables native SGX verification via dcap-qvl.
+sgx-verifier-dcap-qvl = ["verifier/sgx-verifier-dcap-qvl"]
+az-snp-vtpm-verifier = ["verifier/az-snp-vtpm-verifier"]
+az-tdx-vtpm-verifier = ["verifier/az-tdx-vtpm-verifier"]
+snp-verifier = ["verifier/snp-verifier"]
+csv-verifier = ["verifier/csv-verifier"]
+hygon-dcu-verifier = ["verifier/hygon-dcu-verifier"]
+cca-verifier = ["verifier/cca-verifier"]
+se-verifier = ["verifier/se-verifier"]
+nvidia-verifier = ["verifier/nvidia-verifier"]
+tpm-verifier = ["verifier/tpm-verifier"]
+wasm-verification-component-driver = ["verifier/wasm-verification-component-driver"]
+
+rvps-grpc = ["prost", "tonic"]
+
+# For building gRPC CoCo-AS binary
+grpc-bin = ["clap", "prost", "tonic", "tonic-prost"]
+
+# For restful CoCo-AS binary
+restful-bin = ["actix-cors", "actix-web/openssl", "clap"]
+
+[[bin]]
+name = "grpc-as"
+required-features = ["grpc-bin"]
+
+[[bin]]
+name = "restful-as"
+required-features = ["restful-bin"]
+
+[dependencies]
+actix-web = { workspace = true, optional = true }
+anyhow.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+canon-json = "0.2.1"
+cfg-if.workspace = true
+clap = { workspace = true, optional = true }
+ear.workspace = true
+hex.workspace = true
+jsonwebtoken.workspace = true
+kbs-types.workspace = true
+openssl.workspace = true
+prost = { workspace = true, optional = true }
+reference-value-provider-service.path = "../rvps"
+regorus.workspace = true
+rsa.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_variant = "0.1.2"
+sha2.workspace = true
+shadow-rs.workspace = true
+strum.workspace = true
+tempfile.workspace = true
+time.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+toml.workspace = true
+tonic = { workspace = true, optional = true }
+tonic-prost = { workspace = true, optional = true }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+verifier = { path = "../deps/verifier", default-features = false }
+actix-cors = { version = "0.7", optional = true }
+
+[build-dependencies]
+shadow-rs.workspace = true
+tonic-prost-build.workspace = true
+
+[dev-dependencies]
+assert-json-diff.workspace = true
+ciborium = "0.2.2"
+hex.workspace = true
+rstest.workspace = true
+serial_test.workspace = true
+sev = { git = "https://github.com/virtee/sev", rev = "d487809188c3c92e397bc92e2cb2a85eb982c980", default-features = false, features = ["openssl", "snp", "serde"] }
+sha2.workspace = true
+tempfile.workspace = true
+testing_logger = "0.1.1"
+wasm-verification-component = { path = "../../trustmee-verification-library" }

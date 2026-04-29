@@ -1,0 +1,633 @@
+openapi: 3.1.0
+info:
+  title: Key Broker Service (KBS) API
+  description: HTTP based API for describing the communication between a Key
+               Broker Client (KBC) in a confidential guest and a trusted Key
+               Broker Service.
+  version: 0.1.0
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+- url: http://<kbs>/kbs/v0
+  description: KBS API endpoints
+
+paths:
+  /auth:
+    post:
+      operationId: attestationAuth
+      summary: Initiate an attestation authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Request'
+
+      responses:
+        200:
+          description: >-
+            The KBS attestation challenge.
+            The KBS session ID is returned in a cookie named `kbs-session-id`.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: kbs-session-id=1234
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Challenge'
+        400:
+          description: The request content or format is not supported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInformation'
+  /attest:
+    post:
+      operationId: attestationEvidence
+      summary: Send an attestation evidence and receive an attestation results token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Attestation'
+
+      parameters:
+        - in: cookie
+          name: kbs-session-id
+          schema:
+            type: string
+
+      responses:
+        200:
+          description: The attestation evidence is authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttestationToken'
+        401:
+          description: Missing or invalid session ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInformation'
+
+  /attestation-policy:
+    post:
+      operationId: setAttestationPolicy
+      summary: Set attestation verification policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttestationPolicy'
+      responses:
+        200:
+          description: Policy set successfully
+        401:
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInformation'
+        400:
+          description: Invalid policy format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInformation'
+
+  /reference-value/{reference_value_id}:
+    get:
+      operationId: getReferenceValue
+      summary: Query reference value by ID
+      parameters:
+        - name: reference_value_id
+          in: path
+          description: Reference value ID (can contain slashes for nested paths)
+          schema:
+            type: string
+          required: true
+      responses:
+        200:
+          description: Reference value retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        401:
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInformation'
+        404:
+          description: Reference value not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInformation'
+
+  /reference-value:
+    post:
+      operationId: registerReferenceValue
+      summary: Register a reference value
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        200:
+          description: Reference value registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        401:
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInformation'
+        400:
+          description: Invalid reference value format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInformation'
+  
+  /resource-policy:
+    post:
+      operationId: setResourcePolicy
+      summary: Set resource distribution policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourcePolicy'
+      responses:
+        200:
+          description: Policy set successfully
+        401:
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInformation'
+        400:
+          description: Invalid policy format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInformation'
+    get:
+      operationId: getResourcePolicy
+      summary: Get resource distribution policy
+      responses:
+        200:
+          description: Policy retrieved successfully
+          content:
+            text/xml:
+              schema:
+                type: string
+        401:
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInformation'
+
+  /metrics:
+    servers:
+    - url: http://<kbs>
+      description: Metrics endpoint (not under /kbs/v0 prefix)
+    get:
+      operationId: getMetrics
+      summary: Get Prometheus metrics
+      description: Returns Prometheus-formatted metrics for monitoring
+      responses:
+        200:
+          description: Metrics retrieved successfully
+          content:
+            text/plain:
+              schema:
+                type: string
+                description: Prometheus metrics in text format
+    post:
+      operationId: metricsMethodNotAllowed
+      summary: Metrics endpoint does not support POST
+      responses:
+        405:
+          description: Method not allowed
+
+  /resource/{repository}/{type}/{tag}:
+    get:
+      operationId: getResource
+      summary: Get a secret resource from the Key Broker Service.
+      parameters:
+        - in: cookie
+          name: kbs-session-id
+          schema:
+            type: string
+          required: false
+        - name: repository
+          in: path
+          description: A parent path of resource.
+          schema:
+            type: string
+          required: true
+        - name: type
+          in: path
+          description: Resource type name
+          schema:
+            type: string
+          required: true
+        - name: tag
+          in: path
+          description: Resource instance tag
+          schema:
+            type: string
+          required: true
+      responses:
+        200:
+          description: >-
+            The KBS reponse including the resource.
+            The KBS session ID is returned in a cookie named `kbs-session-id`.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: kbs-session-id=1234
+          content:
+            application/jwe:
+              schema:
+                $ref: '#/components/schemas/JweResponse'
+        401:
+          description: Missing or invalid session ID
+        403:
+          description: The KBC is not allowed to get that resource
+        404:
+          description: The requested resource does not exist
+    post:
+      operationId: registerSecretResource
+      summary: Register a secret resource into the Key Broker Service.
+      requestBody:
+        required: true
+        content: '*'
+      parameters:
+        - name: repository
+          in: path
+          description: A parent path of resource, can be empty to use the default repository.
+          schema:
+            type: string
+          required: false
+        - name: type
+          in: path
+          description: Resource type name
+          schema:
+            type: string
+          required: true
+        - name: tag
+          in: path
+          description: Resource instance tag
+          schema:
+            type: string
+          required: true
+
+
+components:
+  schemas:
+
+    Request:
+      required:
+        - version
+        - tee
+      type: object
+      properties:
+        version:
+          type: string
+        tee:
+          type: string
+          enum: [az-snp-vtpm, az-tdx-vtpm, nvidia, sgx, snp, tdx, cca, csv, se, hygondcu, tpm, sample, sampledevice]
+        extra-params:
+          description: >-
+            Freely formatted JSON object used for HW-TEE specific attestation
+            processes.
+          type: object
+      description: KBC attestation authentication request
+
+    Challenge:
+      required:
+        - nonce
+      type: object
+      properties:
+        nonce:
+          type: string
+        extra-params:
+          description:
+            Freely formatted JSON object used for HW-TEE specific attestation
+            processes.
+          type: object
+      description:
+        KBS attestation challenge, sent in response to the KBC Request.
+
+    Attestation:
+      required:
+        - runtime-data
+        - tee-evidence
+      type: object
+      properties:
+        init-data:
+          $ref: '#/components/schemas/InitData'
+        runtime-data:
+          $ref: '#/components/schemas/RuntimeData'
+        tee-evidence:
+          $ref: '#/components/schemas/CompositeEvidence'
+      description: >-
+        Attestation evidence sent from KBC to KBS, including runtime data and TEE evidence.
+
+    InitData:
+      type: object
+      required:
+        - format
+        - body
+      properties:
+        format:
+          type: string
+          description: Format that INITDATA body should be deserialized/read to
+          enum: [json, toml]
+        body:
+          type: string
+          description: Initialization data contents, in the format specified by `format`
+
+    CompositeEvidence:
+      type: object
+      required:
+        - primary_evidence
+        - additional_evidence
+      properties:
+        primary_evidence:
+          description: Primary TEE evidence. Deserialization dependent on underlying attestation service.
+          type: object
+        additional_evidence:
+          type: string
+          description: >-
+            Additional evidence for secondary TEE devices within a client.
+            JSON mapping of Tee --> (TEE class, TEE evidence), represented as string
+            to avoid {de}serialization inconsistencies.
+
+    TeePubKey:
+      type: object
+      discriminator:
+        propertyName: kty
+      oneOf:
+        - $ref: '#/components/schemas/TeePubKeyRSA'
+        - $ref: '#/components/schemas/TeePubKeyEC'
+      description: TEE public key, can be either RSA or EC format
+
+    TeePubKeyRSA:
+      type: object
+      required:
+        - kty
+        - alg
+        - n
+        - e
+      properties:
+        kty:
+          type: string
+          enum: [RSA]
+          description: Key type
+        alg:
+          type: string
+          description: Algorithm
+        n:
+          type: string
+          description: RSA key modulus
+        e:
+          type: string
+          description: RSA key exponent
+
+    TeePubKeyEC:
+      type: object
+      required:
+        - kty
+        - crv
+        - alg
+        - x
+        - y
+      properties:
+        kty:
+          type: string
+          enum: [EC]
+          description: Key type
+        crv:
+          type: string
+          description: Elliptic curve name
+        alg:
+          type: string
+          description: Algorithm
+        x:
+          type: string
+          description: EC key x coordinate
+        y:
+          type: string
+          description: EC key y coordinate
+
+    Response:
+      required:
+        - token
+      type: object
+      properties:
+        token:
+          type: string
+          description: >-
+            A serialized JSON Web Token (https://jwt.io).
+            The token value is a string, which is made of 3 strings, separated
+            by dots.
+            The first string is a Base64-url encoding of
+            '#/components/schemas/AttestationTokenHeader'.
+            The second string is a Base64-url encoding of
+            '#/components/schemas/AttestationTokenPayload'.
+            The third string is a Base64-url encoding of the token signature.
+      description: >-
+        Attestation token returned by the attestation service.
+        This is the same as AttestationToken schema.
+
+    JweResponse:
+      required:
+        - protected
+        - encrypted_key
+        - iv
+        - ciphertext
+      type: object
+      properties:
+        protected:
+          description: A Base64-url encoding of '#/components/schemas/KeyHeader'
+          type: string
+        ciphertext:
+          type: string
+          description: A Base64-url encoding of the encrypted reponse data.
+        encrypted_key:
+          type: string
+          description: >-
+            A Base64-url encoding of the encrypted key used for encrypting the
+            response data.
+        iv:
+          type: string
+          description: >-
+            A Base64-url encoding of the encryption algorithm initialisation
+            vector.
+        aad:
+          type: string
+          description: >-
+            Additional authenticated data (optional).
+        tag:
+          type: string
+          description: >-
+            Authentication tag for the encrypted data.
+      description: >-
+        A JSON Web Encryption (https://www.rfc-editor.org/rfc/rfc7516)
+        formatted object used for encrypted resource responses.
+
+    KeyHeader:
+      required:
+        - alg
+        - enc
+      properties:
+        alg:
+          type: string
+          description: The signature algorithm
+        enc:
+          type: string
+          description: >-
+            Encryption algorithm used to encrypt the response payload.
+
+    AttestationPolicy:
+      required:
+        - policy_id
+        - policy
+      properties:
+        policy_id:
+          type: string
+          description: >-
+            ID used to identify the policy, use "default" to set default policy
+        policy:
+          type: string
+          description: >-
+            Base64 encoded attestation verification policy.
+
+    ResourcePolicy:
+      required:
+        - policy
+      properties:
+        policy:
+          type: string
+          description: >-
+            Base64 encoded resource distribution policy.
+
+    AttestationToken:
+      required:
+        - token
+      type: object
+      properties:
+        token:
+          type: string
+          description: >-
+            A serialized JSON Web Token (https://jwt.io).
+            The token value is a string, which is made of 3 strings, separated
+            by dots.
+            The first string is a Base64-url encoding of
+            '#/components/schemas/AttestationTokenHeader'.
+            The second string is a Base64-url encoding of
+            '#/components/schemas/AttestationTokenPayload'.
+            The third string is a Base64-url encoding of the token signature.
+
+    AttestationTokenHeader:
+      required:
+        - typ
+        - alg
+      properties:
+        typ:
+          enum: [JWT]
+          type: string
+          description: The JWS header type. This must be `JWT`.
+        alg:
+          type: string
+          description: The signature algorithm
+
+    AttestationTokenPayload:
+      required:
+        - ext
+        - iat
+        - iss
+        - jwk
+        - tee-pubkey
+        - tcb-status
+        - evaluation-report
+      properties:
+        ext:
+          type: integer
+          description: The token expiration date, in seconds since the Epoch.
+        iat:
+          type: integer
+          description: The token issuing time, in seconds since the Epoch.
+        iss:
+          type: string
+          description: The token issuer URL.
+        jwk:
+          type: string
+          description: >-
+            A JSON Web Key (https://www.rfc-editor.org/rfc/rfc7517) formatted RSA Public Key for token signature verification.
+        tee-pubkey:
+          $ref: '#/components/schemas/TeePubKey'
+        tcb-status:
+          type: string
+          description: Parsed claims from TEE evidence.
+        evaluation-report:
+          type: string
+          description: Evaluation report of TEE evidence.
+
+    PublicKey:
+      required:
+        - kty
+        - alg
+        - n
+        - e
+      properties:
+        kty:
+          type: string
+          description: Key Type
+        alg:
+          type: string
+          description: Key Algorithm
+        n:
+          type: string
+          description: Key modulus
+        e:
+          type: string
+          description: Key exponent
+      description: >-
+        A JSON Web Key (https://www.rfc-editor.org/rfc/rfc7517) formatted RSA Public Key.
+
+    ErrorInformation:
+      required:
+        - type
+        - detail
+      properties:
+        type:
+          description: >-
+            https://github.com/confidential-containers/kbs/errors/<problem-type>
+          type: string
+        detail:
+          type: string
+      description: >-
+        A Problem Details for HTTP APIs (https://www.rfc-editor.org/rfc/rfc7807)
+        formatted payload.

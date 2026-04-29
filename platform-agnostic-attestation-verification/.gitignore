@@ -1,0 +1,9 @@
+target
+
+evaluation/trustmee-e2e-perf/results/*
+
+paper-evaluation/tools/fetch-tdx-collateral/target
+paper-evaluation/tmp
+paper-evaluation/results
+
+.wasm-verification-component-cache

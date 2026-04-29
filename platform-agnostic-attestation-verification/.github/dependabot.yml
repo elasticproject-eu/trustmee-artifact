@@ -1,0 +1,29 @@
+version: 2
+updates:
+  - package-ecosystem: "devcontainers"
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: daily
+    open-pull-requests-limit: 3
+    allow:
+      - dependency-type: direct
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "gomod"
+    directory: "/rvps/cgo" # Location of go.mod
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 1

@@ -1,0 +1,74 @@
+package trustee:verifier;
+
+interface snp-host-crypto-interface {
+  enum processor-generation {
+    milan,
+    genoa,
+    turin,
+  }
+
+  enum vek-kind {
+    vcek,
+    vlek,
+  }
+
+  variant optional-bytes {
+    value(list<u8>),
+    not-provided,
+  }
+
+  record verified-vek-meta {
+    vek-kind: vek-kind,
+    hw-id: optional-bytes,
+    bootloader-spl: u8,
+    tee-spl: u8,
+    snp-spl: u8,
+    microcode-spl: u8,
+    fmc-spl: option<u8>,
+  }
+
+  verify-snp-crypto: func(
+    evidence: list<u8>,
+    processor: processor-generation,
+    vendor-ark-der: list<u8>,
+    vendor-ask-der: list<u8>,
+    vendor-asvk-der: list<u8>,
+    fetched-vcek-der: optional-bytes,
+  ) -> result<verified-vek-meta, string>;
+}
+
+interface verifier-interface {
+  variant optional-data {
+    value(list<u8>),
+    not-provided,
+  }
+
+  record endorsement {
+    label: string,
+    media-type: string,
+    payload: list<u8>,
+  }
+
+  record verifier-input {
+    evidence: list<u8>,
+    evidence-media-type: string,
+    endorsements: list<endorsement>,
+  }
+
+  type report-data = optional-data;
+  type init-data-hash = optional-data;
+
+  resource verifier {
+    constructor();
+    evaluate: func(
+      input: verifier-input,
+      expected-report-data: report-data,
+      expected-init-data-hash: init-data-hash,
+    ) -> string;
+  }
+}
+
+world verifier {
+  import snp-host-crypto-interface;
+  export verifier-interface;
+}

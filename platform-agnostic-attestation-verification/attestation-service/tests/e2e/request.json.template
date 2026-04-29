@@ -1,0 +1,7 @@
+{
+    "verification_requests": [{
+	"tee": "%TEE_NAME%",
+        "evidence": "%EVIDENCE%"
+    }],
+    "policy_ids": []
+}

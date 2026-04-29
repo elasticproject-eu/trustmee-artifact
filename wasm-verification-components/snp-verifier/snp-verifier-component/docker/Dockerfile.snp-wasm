@@ -1,0 +1,53 @@
+# syntax=docker/dockerfile:1.7
+FROM ghcr.io/webassembly/wasi-sdk:wasi-sdk-29 AS wasi-sdk
+
+FROM rust:1.90.0
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    curl \
+    make \
+    perl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=wasi-sdk /opt/wasi-sdk /opt/wasi-sdk
+
+ENV WASI_SDK_PATH=/opt/wasi-sdk
+ENV WASI_SDK_ROOT=/opt/wasi-sdk
+
+ARG OPENSSL_VERSION=3.5.4
+
+# Build only the WASI OpenSSL that snp-verifier-component needs.
+RUN mkdir -p /opt/openssl/src /opt/openssl/wasip2 /opt/openssl/out && \
+    curl -fsSL -o /tmp/openssl-${OPENSSL_VERSION}.tar.gz \
+      https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz && \
+    tar -xzf /tmp/openssl-${OPENSSL_VERSION}.tar.gz -C /opt/openssl/src && \
+    cp -a /opt/openssl/src/openssl-${OPENSSL_VERSION} /opt/openssl/wasip2/openssl-${OPENSSL_VERSION}
+
+RUN cd /opt/openssl/wasip2/openssl-${OPENSSL_VERSION} && \
+    PREFIX_WASI=/opt/openssl/out/openssl-wasip2-simd && \
+    rm -rf "$PREFIX_WASI" && \
+    CC=/opt/wasi-sdk/bin/wasm32-wasip2-clang \
+    AR=/opt/wasi-sdk/bin/llvm-ar \
+    RANLIB=/opt/wasi-sdk/bin/llvm-ranlib \
+    NM=/opt/wasi-sdk/bin/llvm-nm \
+    CFLAGS="-O3 -msimd128" \
+    CXXFLAGS="-O3 -msimd128" \
+      perl ./Configure gcc \
+        --prefix="$PREFIX_WASI" \
+        --openssldir="$PREFIX_WASI/ssl" \
+        no-shared no-dso no-asm \
+        no-apps no-tests \
+        no-sock no-dgram \
+        no-threads no-async \
+        no-engine no-secure-memory \
+        no-ui-console no-autoload-config && \
+    make -j"$(nproc)" && \
+    make install_sw
+
+RUN rustup target add wasm32-wasip2
+
+WORKDIR /work

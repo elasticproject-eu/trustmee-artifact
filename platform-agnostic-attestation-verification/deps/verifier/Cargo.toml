@@ -1,0 +1,137 @@
+[package]
+name = "verifier"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["all-verifier"]
+all-verifier = [
+    "tdx-verifier",
+    "sgx-verifier",
+    "snp-verifier",
+    "az-snp-vtpm-verifier",
+    "az-tdx-vtpm-verifier",
+    "csv-verifier",
+    "hygon-dcu-verifier",
+    "cca-verifier",
+    "se-verifier",
+    "nvidia-verifier",
+    "tpm-verifier",
+    "wasm-verification-component-driver",
+]
+tdx-verifier = ["eventlog", "scroll", "intel-tee-quote-verification-rs"]
+# Paper-evaluation alternative path that uses the pure-Rust `dcap-qvl` crate
+# (the same one used inside the wasm TDX verifier component) for native TDX
+# verification. Toggled at runtime via `TDX_NATIVE_USE_DCAP_QVL=1`.
+tdx-verifier-dcap-qvl = ["tdx-verifier", "dep:dcap-qvl", "dep:dcap-qvl-wasi", "dep:tokio"]
+sgx-verifier = ["scroll", "intel-tee-quote-verification-rs"]
+# Same pure-Rust DCAP-QVL stack for native SGX verification. Toggled at
+# runtime via `SGX_NATIVE_USE_DCAP_QVL=1`.
+sgx-verifier-dcap-qvl = ["sgx-verifier", "dep:dcap-qvl", "dep:dcap-qvl-wasi", "dep:tokio"]
+az-snp-vtpm-verifier = [
+    "az-snp-vtpm",
+    "serde_with",
+    "sev",
+    "snp-verifier",
+    "tss-esapi",
+]
+az-tdx-vtpm-verifier = [
+    "az-tdx-vtpm",
+    "openssl",
+    "serde_with",
+    "tdx-verifier",
+    "tss-esapi",
+]
+snp-verifier = ["asn1-rs", "openssl", "sev", "x509-parser"]
+csv-verifier = ["codicon", "csv-rs", "eventlog", "openssl", "tokio/fs"]
+hygon-dcu-verifier = ["csv-rs"]
+cca-verifier = ["ear", "jsonwebtoken", "veraison-apiclient", "ccatoken"]
+se-verifier = ["openssl", "pv", "serde_with", "tokio/sync"]
+nvidia-verifier = [
+    "nvml-wrapper",
+    "jsonwebtoken",
+    "asn1-rs",
+    "openssl",
+    "x509-parser",
+]
+tpm-verifier = ["az-cvm-vtpm", "openssl", "tss-esapi"]
+wasm-verification-component-driver = ["dep:wasm-verification-component"]
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+asn1-rs = { version = "0.7.1", optional = true }
+async-trait.workspace = true
+az-snp-vtpm = { version = "0.8.1", default-features = false, features = [
+    "verifier",
+], optional = true }
+az-cvm-vtpm = { version = "0.8.1", default-features = false, features = [
+    "verifier",
+], optional = true }
+az-tdx-vtpm = { version = "0.8.1", default-features = false, features = [
+    "verifier",
+], optional = true }
+base64.workspace = true
+cfg-if.workspace = true
+codicon = { version = "3.0", optional = true }
+csv-rs = { git = "https://github.com/openanolis/csv-rs", rev = "b67a07e", optional = true, default-features = false, features = [
+    "network",
+] }
+eventlog = { path = "../eventlog", optional = true }
+wasm-verification-component = { path = "../../../trustmee-verification-library", optional = true }
+hex.workspace = true
+jsonwebkey = "0.4.0"
+jsonwebtoken = { workspace = true, default-features = false, optional = true }
+kbs-types.workspace = true
+openssl = { version = "0.10.75", optional = true }
+pv = { version = "0.10.0", package = "s390_pv", optional = true }
+scroll = { version = "0.13.0", default-features = false, features = [
+    "derive",
+], optional = true }
+serde.workspace = true
+serde_json.workspace = true
+serde_with = { workspace = true, optional = true }
+# note: this one is overriden in the workspace Cargo.toml, because the
+# 7.1.0 version doesn't build w/ sev + serde features enabled. The
+# override can be removed once 7.2.0 is released
+sev = { version = "7", default-features = false, features = [
+    "openssl",
+    "snp",
+    "serde",
+], optional = true }
+sha2.workspace = true
+tokio = { workspace = true, optional = true }
+tracing.workspace = true
+intel-tee-quote-verification-rs = { git = "https://github.com/intel/confidential-computing.tee.dcap", tag = "DCAP_1.24", optional = true }
+# Pure-Rust DCAP quote verification library. Same version the wasm TDX/SGX
+# verifier components use — enables native-vs-wasm parity tests.
+dcap-qvl = { version = "0.3.6", optional = true, default-features = false, features = ["std", "report"] }
+# Collateral fetcher. The upstream crate lives in the wasm-verification-components
+# workspace; we consume it as a path dep and enable its `reqwest-http` feature
+# for native builds.
+dcap-qvl-wasi = { path = "../../../wasm-verification-components/tdx-verifier/dcap-qvl-wasi", optional = true, default-features = false, features = ["reqwest-http"] }
+strum.workspace = true
+veraison-apiclient = { git = "https://github.com/veraison/rust-apiclient", rev = "fe149cd", optional = true }
+ccatoken = { git = "https://github.com/veraison/rust-ccatoken", rev = "6d5b8db", optional = true }
+ear = { version = "0.4.0", optional = true }
+x509-parser = { version = "0.18.1", optional = true }
+reqwest.workspace = true
+reqwest-middleware = "0.4.2"
+http-cache-reqwest = { version = "0.16.0", default-features = false, features = [
+    "manager-moka",
+] }
+bitflags = { version = "2.10.0", features = ["serde"] }
+time.workspace = true
+nvml-wrapper = { version = "0.11.0", optional = true, default-features = false, features = [
+    "serde",
+] }
+tss-esapi = { version = "7.5", optional = true }
+
+[build-dependencies]
+
+[dev-dependencies]
+assert-json-diff.workspace = true
+rstest.workspace = true
+serial_test.workspace = true
+tokio.workspace = true
+tracing-subscriber.workspace = true

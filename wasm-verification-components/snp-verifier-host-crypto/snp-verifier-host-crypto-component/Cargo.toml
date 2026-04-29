@@ -1,0 +1,27 @@
+[package]
+name = "snp-verifier-host-crypto-component"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+test = false
+doctest = false
+
+[package.metadata.component]
+package = "trustee:verifier"
+
+[dependencies]
+anyhow.workspace = true
+base64.workspace = true
+ciborium.workspace = true
+hex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sev = { git = "https://github.com/virtee/sev", rev = "d487809188c3c92e397bc92e2cb2a85eb982c980", default-features = false, features = ["snp", "serde"] }
+sha2.workspace = true
+strum.workspace = true
+tracing.workspace = true
+waki = "0.5.1"
+wasip2 = "=1.0.1"
+wit-bindgen = "0.46.0"

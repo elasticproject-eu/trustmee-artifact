@@ -1,0 +1,19 @@
+[http_server]
+insecure_http = true
+
+[attestation_token]
+insecure_key = true
+
+[attestation_service]
+type = "coco_as_grpc"
+as_addr = "http://127.0.0.1:50004"
+pool_size = 200
+
+[admin]
+# Do not use this in production.
+type = "InsecureAllowAll"
+
+[[plugins]]
+name = "resource"
+type = "LocalFs"
+dir_path = "/opt/confidential-containers/kbs/repository"

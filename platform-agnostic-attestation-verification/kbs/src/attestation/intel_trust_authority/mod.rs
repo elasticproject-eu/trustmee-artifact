@@ -1,0 +1,609 @@
+// Copyright (c) 2023 by Intel.
+// Licensed under the Apache License, Version 2.0, see LICENSE for details.
+// SPDX-License-Identifier: Apache-2.0
+
+use crate::{
+    attestation::backend::{generic_generate_challenge, make_nonce, Attest, IndependentEvidence},
+    token::{jwk::JwkAttestationTokenVerifier, AttestationTokenVerifierConfig},
+};
+use anyhow::*;
+use async_trait::async_trait;
+use az_cvm_vtpm::hcl::HclReport;
+use base64::{engine::general_purpose::STANDARD, Engine};
+use educe::Educe;
+use kbs_types::{Challenge, HashAlgorithm, Tee};
+use reqwest::header::{ACCEPT, CONTENT_TYPE, USER_AGENT};
+use serde::{Deserialize, Serialize};
+use serde_json::{from_value, json};
+use serde_with::base64::{Base64, UrlSafe};
+use serde_with::serde_as;
+use sha2::{Digest, Sha512};
+use std::result::Result::Ok;
+use tracing::{debug, info, warn};
+
+const SUPPORTED_HASH_ALGORITHMS_JSON_KEY: &str = "supported-hash-algorithms";
+const SELECTED_HASH_ALGORITHM_JSON_KEY: &str = "selected-hash-algorithm";
+
+const ERR_NO_TEE_ALGOS: &str = "ITA: TEE does not support any hash algorithms";
+const ERR_INVALID_TEE: &str = "ITA: Unknown TEE specified";
+
+const BASE_AS_ADDR: &str = "/appraisal/v2/attest";
+const AZURE_ADDR_SUFFIX: &str = "/azure";
+
+const TRUSTEE_USER_AGENT: &str = "Confidential-containers-trustee";
+
+#[derive(Serialize, Deserialize, Debug)]
+struct DcapTeeEvidence {
+    quote: String,
+    #[serde(skip_deserializing)]
+    runtime_data: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    user_data: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename(deserialize = "cc_eventlog"))]
+    event_log: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+struct AzItaTeeEvidenceV0 {
+    hcl_report: Vec<u8>,
+    td_quote: Vec<u8>,
+}
+
+#[derive(Deserialize, Debug)]
+enum AzItaTeeEvidenceVersion {
+    #[serde(rename = "1")]
+    V1,
+}
+
+#[serde_as]
+#[derive(Deserialize, Debug)]
+struct AzItaTeeEvidenceV1 {
+    #[allow(dead_code)]
+    version: AzItaTeeEvidenceVersion,
+    #[serde_as(as = "Base64<UrlSafe>")]
+    hcl_report: Vec<u8>,
+    #[serde_as(as = "Base64<UrlSafe>")]
+    td_quote: Vec<u8>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+enum AzItaTeeEvidence {
+    V0(AzItaTeeEvidenceV0),
+    V1(AzItaTeeEvidenceV1),
+}
+
+impl AzItaTeeEvidence {
+    fn hcl_report(&self) -> &Vec<u8> {
+        match self {
+            Self::V0(evidence) => &evidence.hcl_report,
+            Self::V1(evidence) => &evidence.hcl_report,
+        }
+    }
+
+    fn td_quote(&self) -> &Vec<u8> {
+        match self {
+            Self::V0(evidence) => &evidence.td_quote,
+            Self::V1(evidence) => &evidence.td_quote,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct NvDeviceEvidence {
+    device_evidence_list: Vec<NvDeviceReportAndCert>,
+}
+
+#[derive(Clone, Deserialize, Serialize, Debug)]
+struct NvDeviceReportAndCert {
+    evidence: String,
+    #[serde(skip_deserializing)]
+    gpu_nonce: String,
+    certificate: String,
+    arch: String,
+}
+
+#[derive(Serialize, Debug)]
+struct AttestReqData {
+    policy_ids: Vec<String>,
+    policy_must_match: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tdx: Option<DcapTeeEvidence>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sgx: Option<DcapTeeEvidence>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    nvgpu: Option<NvDeviceReportAndCert>,
+}
+
+#[derive(Deserialize, Debug)]
+struct AttestRespData {
+    token: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct ErrorResponse {
+    error: String,
+}
+
+#[derive(Clone, Educe, Deserialize, PartialEq, Default)]
+#[educe(Debug)]
+pub struct IntelTrustAuthorityConfig {
+    pub base_url: String,
+    #[educe(Debug(ignore))]
+    pub api_key: String,
+    pub certs_file: String,
+    pub allow_unmatched_policy: Option<bool>,
+    #[serde(default)]
+    pub policy_ids: Vec<String>,
+}
+
+pub struct IntelTrustAuthority {
+    config: IntelTrustAuthorityConfig,
+    token_verifier: JwkAttestationTokenVerifier,
+}
+
+#[async_trait]
+impl Attest for IntelTrustAuthority {
+    async fn verify(&self, evidence_to_verify: Vec<IndependentEvidence>) -> anyhow::Result<String> {
+        let policy_ids = self.config.policy_ids.clone();
+
+        let policy_must_match = match policy_ids.is_empty() {
+            true => false,
+            false => !self.config.allow_unmatched_policy.unwrap_or_default(),
+        };
+
+        let mut req_data = AttestReqData {
+            policy_ids,
+            policy_must_match,
+            tdx: None,
+            sgx: None,
+            nvgpu: None,
+        };
+
+        let mut att_url = format!("{}{BASE_AS_ADDR}", &self.config.base_url);
+
+        for independent_evidence in evidence_to_verify {
+            match independent_evidence.tee {
+                Tee::AzTdxVtpm => {
+                    att_url = format!("{att_url}{AZURE_ADDR_SUFFIX}");
+
+                    let evidence =
+                        from_value::<AzItaTeeEvidence>(independent_evidence.tee_evidence.clone())
+                            .context(format!(
+                            "Failed to deserialize TEE: {:?} Evidence",
+                            independent_evidence.tee
+                        ))?;
+
+                    let hcl_report = HclReport::new(evidence.hcl_report().clone())?;
+
+                    req_data.tdx = Some(DcapTeeEvidence {
+                        quote: STANDARD.encode(evidence.td_quote()),
+                        runtime_data: STANDARD.encode(hcl_report.var_data()),
+                        user_data: Some(
+                            STANDARD.encode(independent_evidence.runtime_data.to_string()),
+                        ),
+                        event_log: None,
+                    });
+                }
+                Tee::Tdx => {
+                    let mut evidence =
+                        from_value::<DcapTeeEvidence>(independent_evidence.tee_evidence.clone())
+                            .context(format!(
+                                "Failed to deserialize TEE: {:?} Evidence",
+                                independent_evidence.tee
+                            ))?;
+
+                    evidence.runtime_data =
+                        STANDARD.encode(independent_evidence.runtime_data.to_string());
+
+                    req_data.tdx = Some(evidence);
+                }
+                Tee::Sgx => {
+                    let mut evidence =
+                        from_value::<DcapTeeEvidence>(independent_evidence.tee_evidence.clone())
+                            .context(format!(
+                                "Failed to deserialize TEE: {:?} Evidence",
+                                independent_evidence.tee
+                            ))?;
+
+                    evidence.runtime_data =
+                        STANDARD.encode(independent_evidence.runtime_data.to_string());
+
+                    req_data.sgx = Some(evidence);
+                }
+                Tee::Nvidia => {
+                    let evidence =
+                        from_value::<NvDeviceEvidence>(independent_evidence.tee_evidence.clone())
+                            .context(format!(
+                            "Failed to deserialize TEE: {:?} Evidence",
+                            independent_evidence.tee
+                        ))?;
+
+                    if evidence.device_evidence_list.is_empty() {
+                        warn!(
+                            "TEE {:?} evidence has empty device list. Drop the evidence.",
+                            independent_evidence.tee
+                        );
+                        continue;
+                    }
+
+                    // only one GPU supported at the moment
+                    let mut nvgpu = evidence.device_evidence_list[0].clone();
+
+                    let runtime_data_hash =
+                        Sha512::digest(independent_evidence.runtime_data.to_string()).to_vec();
+                    nvgpu.gpu_nonce = hex::encode(&runtime_data_hash[0..32]);
+
+                    req_data.nvgpu = Some(nvgpu);
+                }
+                _ => {
+                    bail!(
+                        "Intel Trust Authority: TEE {0:?} is not supported.",
+                        independent_evidence.tee
+                    );
+                }
+            };
+        }
+
+        let attest_req_body = serde_json::to_string(&req_data)
+            .context("Failed to serialize attestation request body")?;
+
+        // send attest request
+        info!("POST attestation request ...");
+        debug!("Attestation URL: {:?}", &att_url);
+
+        let user_agent = format!(
+            "{TRUSTEE_USER_AGENT} {}/{}",
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_VERSION")
+        );
+
+        let client = reqwest::Client::new();
+        let resp = client
+            .post(att_url)
+            .header(USER_AGENT, user_agent)
+            .header(CONTENT_TYPE, "application/json")
+            .header(ACCEPT, "application/json")
+            .header("x-api-key", &self.config.api_key)
+            .body(attest_req_body)
+            .send()
+            .await
+            .context("Failed to POST attestation HTTP request")?;
+
+        let status = resp.status();
+        if status != reqwest::StatusCode::OK {
+            let body = resp
+                .json::<ErrorResponse>()
+                .await
+                .context("Failed to deserialize attestation error response");
+
+            // Only inspect the body if there is one.
+            match body {
+                Ok(body) => bail!(
+                    "Attestation request failed: response status={}, message={}",
+                    status,
+                    body.error
+                ),
+                _ => bail!("Attestation request failed: response status={}", status),
+            }
+        }
+        let resp_data = resp
+            .json::<AttestRespData>()
+            .await
+            .context("Failed to deserialize attestation response")?;
+
+        let _token = self
+            .token_verifier
+            .verify(resp_data.token.clone())
+            .await
+            .context("Failed to verify attestation token")?;
+
+        Ok(resp_data.token.clone())
+    }
+
+    async fn generate_challenge(
+        &self,
+        tee: Tee,
+        tee_parameters: serde_json::Value,
+    ) -> Result<Challenge> {
+        debug!("ITA: generate_challenge: tee: {tee:?}, tee_parameters: {tee_parameters:?}");
+
+        if tee_parameters.is_null() {
+            debug!(
+                "ITA: generate_challenge: no TEE parameters so falling back to legacy behaviour"
+            );
+
+            return generic_generate_challenge(tee, tee_parameters).await;
+        }
+
+        let mut supported_hash_algorithms = vec![];
+
+        let Some(hash_algorithms_found) = tee_parameters.get(SUPPORTED_HASH_ALGORITHMS_JSON_KEY)
+        else {
+            info!("ITA: generate_challenge: no TEE hash parameters, so falling back to legacy behaviour");
+
+            return generic_generate_challenge(tee, tee_parameters).await;
+        };
+
+        let Some(algorithms) = hash_algorithms_found.as_array() else {
+            return Err(anyhow!(
+                "ITA: expected array, found {hash_algorithms_found:?}"
+            ));
+        };
+
+        let hash_algorithms: Vec<String> = algorithms
+            .iter()
+            .filter_map(|s| Some(s.as_str()?.to_lowercase()))
+            .collect();
+
+        supported_hash_algorithms.append(&mut hash_algorithms.clone());
+
+        if supported_hash_algorithms.is_empty() {
+            debug!("ITA: generate_challenge: no tee algorithms available");
+
+            bail!(ERR_NO_TEE_ALGOS);
+        }
+
+        debug!("ITA: generate_challenge: supported_hash_algorithms: {supported_hash_algorithms:?}");
+
+        let hash_algorithm: String = match tee {
+            Tee::Sgx | Tee::AzTdxVtpm => {
+                let needed_algorithm = HashAlgorithm::Sha256.as_ref().to_string().to_lowercase();
+
+                if supported_hash_algorithms.contains(&needed_algorithm) {
+                    needed_algorithm
+                } else {
+                    bail!("ITA: SGX TEE does not support {needed_algorithm}");
+                }
+            }
+            Tee::Tdx => {
+                let needed_algorithm = HashAlgorithm::Sha512.as_ref().to_string().to_lowercase();
+
+                if supported_hash_algorithms.contains(&needed_algorithm) {
+                    needed_algorithm
+                } else {
+                    bail!("ITA: TDX TEE does not support {needed_algorithm}");
+                }
+            }
+            _ => bail!(ERR_INVALID_TEE),
+        };
+
+        let extra_params = json!({
+            SELECTED_HASH_ALGORITHM_JSON_KEY: hash_algorithm,
+        });
+
+        let nonce = make_nonce().await?;
+
+        Ok(Challenge {
+            nonce,
+            extra_params,
+        })
+    }
+}
+
+impl IntelTrustAuthority {
+    pub async fn new(config: IntelTrustAuthorityConfig) -> Result<Self> {
+        let token_verifier = JwkAttestationTokenVerifier::new(&AttestationTokenVerifierConfig {
+            extra_teekey_paths: vec![],
+            trusted_certs_paths: vec![],
+            trusted_jwk_sets: vec![config.certs_file.clone()],
+            insecure_key: true,
+        })
+        .await
+        .context("Failed to initialize token verifier")?;
+
+        Ok(Self {
+            config: config.clone(),
+            token_verifier,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::*;
+    use serde_json::Value;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    // Generate the contents for an ITA certificates file and return it as
+    // a JSON string.
+    fn create_certs_file_json_string() -> String {
+        let data = json!({ "keys": [
+        {
+            "alg": "PS384",
+            "e": "AQAB",
+            "kid": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "kty": "RSA",
+            "n": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "x5c": [
+                "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          ]
+        },
+        {
+            "alg": "RS256",
+            "e": "AQAB",
+            "kid": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "kty": "RSA",
+            "n": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "x5c": [
+                "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          ]
+        }]}).to_string();
+
+        data
+    }
+
+    #[rstest]
+    #[tokio::test]
+    #[case(
+        Tee::Tdx,
+        json!({}),
+        Ok(Challenge{
+            nonce: "".into(),
+            extra_params: "".into()
+        })
+    )]
+    #[tokio::test]
+    #[case(
+        Tee::Tdx,
+        json!(null),
+        Ok(Challenge{
+            nonce: "".into(),
+            extra_params: "".into()
+        })
+    )]
+    #[tokio::test]
+    #[case(
+        Tee::Tdx,
+        json!(""),
+        Ok(Challenge{
+            nonce: "".into(),
+            extra_params: "".into()
+        })
+    )]
+    #[tokio::test]
+    #[case(
+        Tee::Tdx,
+        json!({SUPPORTED_HASH_ALGORITHMS_JSON_KEY: []}),
+        Err(anyhow!(ERR_NO_TEE_ALGOS))
+    )]
+    #[tokio::test]
+    #[case(
+        Tee::Sgx,
+        json!({}),
+        Ok(Challenge{
+            nonce: "".into(),
+            extra_params: "".into()
+        })
+    )]
+    #[tokio::test]
+    #[case(
+        Tee::Sgx,
+        json!(null),
+        Ok(Challenge{
+            nonce: "".into(),
+            extra_params: "".into()
+        })
+    )]
+    #[tokio::test]
+    #[case(
+        Tee::Sgx,
+        json!(""),
+        Ok(Challenge{
+            nonce: "".into(),
+            extra_params: "".into()
+        })
+    )]
+    #[tokio::test]
+    #[case(
+        Tee::Sgx,
+        json!({SUPPORTED_HASH_ALGORITHMS_JSON_KEY: []}),
+        Err(anyhow!(ERR_NO_TEE_ALGOS))
+    )]
+    #[tokio::test]
+    #[case(
+        Tee::Tdx,
+        json!({SUPPORTED_HASH_ALGORITHMS_JSON_KEY: [HashAlgorithm::Sha256.to_string()]}),
+        Err(anyhow!("ITA: TDX TEE does not support sha512"))
+    )]
+    #[tokio::test]
+    #[case(
+        Tee::Sgx,
+        json!({SUPPORTED_HASH_ALGORITHMS_JSON_KEY: [HashAlgorithm::Sha512.to_string()]}),
+        Err(anyhow!("ITA: SGX TEE does not support sha256"))
+    )]
+    #[tokio::test]
+    #[case(
+        Tee::Tdx,
+        json!({SUPPORTED_HASH_ALGORITHMS_JSON_KEY: [HashAlgorithm::Sha512.to_string()]}),
+        Ok(Challenge{
+            nonce: "".into(),
+            extra_params: json!({SELECTED_HASH_ALGORITHM_JSON_KEY: HashAlgorithm::Sha512.to_string()})})
+    )]
+    #[tokio::test]
+    #[case(
+        Tee::Tdx,
+        json!({SUPPORTED_HASH_ALGORITHMS_JSON_KEY: [HashAlgorithm::Sha256.to_string(), HashAlgorithm::Sha512.to_string()]}),
+        Ok(Challenge{
+            nonce: "".into(),
+            extra_params: json!({SELECTED_HASH_ALGORITHM_JSON_KEY: HashAlgorithm::Sha512.to_string()})})
+    )]
+    #[tokio::test]
+    #[case(
+        Tee::Sgx,
+        json!({SUPPORTED_HASH_ALGORITHMS_JSON_KEY: [HashAlgorithm::Sha256.to_string()]}),
+        Ok(Challenge{
+            nonce: "".into(),
+            extra_params: json!({SELECTED_HASH_ALGORITHM_JSON_KEY: HashAlgorithm::Sha256.to_string()})})
+    )]
+    #[tokio::test]
+    #[case(
+        Tee::Sgx,
+        json!({SUPPORTED_HASH_ALGORITHMS_JSON_KEY: [HashAlgorithm::Sha256.to_string(), HashAlgorithm::Sha512.to_string()]}),
+        Ok(Challenge{
+            nonce: "".into(),
+            extra_params: json!({SELECTED_HASH_ALGORITHM_JSON_KEY: HashAlgorithm::Sha256.to_string()})})
+    )]
+    async fn test_ita_generate_challenge(
+        #[case] tee: Tee,
+        #[case] params: Value,
+        #[case] expected_result: Result<Challenge>,
+    ) {
+        let mut file = NamedTempFile::new().unwrap();
+        let certs_file = "file://".to_owned() + &file.path().display().to_string();
+
+        let json = create_certs_file_json_string();
+
+        file.write_all(json.as_bytes())
+            .expect("failed to write certs file data");
+
+        let cfg = IntelTrustAuthorityConfig {
+            base_url: "".into(),
+            api_key: "".into(),
+            certs_file,
+            allow_unmatched_policy: None,
+            policy_ids: vec![],
+        };
+
+        let msg = format!(
+            "test: certs file json: {json:?}, cfg: {cfg:?}, tee: {tee:?}, params: {params:?}, expected result: {expected_result:?}"
+        );
+
+        let ita = IntelTrustAuthority::new(cfg).await.unwrap();
+
+        let actual_result = ita.generate_challenge(tee, params).await;
+
+        let msg = format!("{msg}, actual result: {actual_result:?}");
+
+        if std::env::var("DEBUG").is_ok() {
+            println!("DEBUG: {}", msg);
+        }
+
+        // Note: for now we simply check for error, not the type of error returned.
+        if expected_result.is_err() {
+            assert!(actual_result.is_err(), "{msg}");
+            return;
+        }
+
+        // Only compare the params as the nonce will have a generated value.
+        let expected_extra_params = expected_result
+            .unwrap()
+            .extra_params
+            .to_string()
+            .to_lowercase();
+        let actual_extra_params = actual_result
+            .unwrap()
+            .extra_params
+            .to_string()
+            .to_lowercase();
+
+        assert_eq!(actual_extra_params, expected_extra_params, "{}", msg);
+    }
+}

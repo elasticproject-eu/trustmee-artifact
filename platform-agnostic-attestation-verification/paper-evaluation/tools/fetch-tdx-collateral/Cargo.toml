@@ -1,0 +1,21 @@
+[package]
+name = "fetch-tdx-collateral"
+version = "0.1.0"
+edition = "2021"
+description = "Paper-eval helper: fetch Intel PCS collateral for a TDX quote and CBOR-encode it for embedding as a CMW endorsement."
+
+[dependencies]
+anyhow = "1.0"
+base64 = "0.22"
+ciborium = "0.2.2"
+clap = { version = "4", features = ["derive"] }
+dcap-qvl = { version = "0.3.6", default-features = false, features = ["std", "report"] }
+dcap-qvl-wasi = { path = "../../../../wasm-verification-components/tdx-verifier/dcap-qvl-wasi", default-features = false, features = ["reqwest-http"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[[bin]]
+name = "fetch-tdx-collateral"
+path = "src/main.rs"
+
+[workspace]

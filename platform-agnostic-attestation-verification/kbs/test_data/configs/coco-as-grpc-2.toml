@@ -1,0 +1,17 @@
+[http_server]
+sockets = ["0.0.0.0:8080"]
+insecure_http = true
+
+[attestation_token]
+
+[attestation_service]
+type = "coco_as_grpc"
+as_addr = "http://as:50004"
+timeout = 5
+
+[admin]
+type = "Simple"
+
+[[admin.personas]]
+id = "admin1"
+public_key_path = "/opt/confidential-containers/trustee/admin1-pubkey.pem"

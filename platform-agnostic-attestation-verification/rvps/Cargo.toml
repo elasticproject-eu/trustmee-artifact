@@ -1,0 +1,56 @@
+[package]
+name = "reference-value-provider-service"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["bin"]
+# Used to build rvps binary
+bin = ["clap", "tracing-subscriber", "shadow-rs"]
+
+# Support in-toto provenance (not ready)
+in-toto = ["path-clean", "sha2"]
+
+rebuild-grpc-protos = []
+
+[[bin]]
+name = "rvps"
+required-features = ["bin"]
+
+[[bin]]
+name = "rvps-tool"
+required-features = ["bin"]
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+chrono = { workspace = true, features = ["serde"] }
+clap = { workspace = true, optional = true }
+config.workspace = true
+path-clean = { version = "1.0.1", optional = true }
+prost.workspace = true
+roxmltree = "0.21.1"
+serde.workspace = true
+serde_json.workspace = true
+sha2 = { workspace = true, optional = true }
+shadow-rs = { workspace = true, optional = true }
+sled = "0.34.7"
+strum.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+tonic.workspace = true
+tonic-prost.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, optional = true }
+
+[build-dependencies]
+shadow-rs.workspace = true
+tonic-prost-build.workspace = true
+
+[dev-dependencies]
+assert-json-diff.workspace = true
+rstest.workspace = true
+serial_test.workspace = true
+tokio.workspace = true
+walkdir = "2.3.2"

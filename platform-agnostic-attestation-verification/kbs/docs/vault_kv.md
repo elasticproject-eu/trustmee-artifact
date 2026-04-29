@@ -1,0 +1,253 @@
+# HashiCorp Vault and OpenBao KV secrets engine resource backend
+
+[HashiCorp Vault](https://developer.hashicorp.com/vault) and [OpenBao](https://www.openbao.org/)
+are secrets management tools that securely store and tightly control access to tokens,
+passwords, certificates, encryption keys, and other secrets. This backend
+integrates the KV v1 (Key-Value version 1) secret engine as a storage backend
+for the Key Broker Service (KBS).
+
+The backend works with both Vault and OpenBao. The KV v1 API and paths are identical, so the KBS
+configuration, path mapping, and token policies described below apply to either project.
+The only difference in practice is the CLI used for server-side setup: use the `vault` CLI for
+HashiCorp Vault and the `openbao` CLI for OpenBao (e.g. `openbao secrets enable -version=1 -path=kv kv`).
+
+The KV v1 backend allows KBS to store and retrieve confidential resources
+(secrets, keys, certificates, etc.) from a centralized Vault or OpenBao instance with
+enterprise-grade security features including access control, audit logging, and
+encryption at rest.
+
+## Features
+
+- **Read/Write Operations**: Full support for storing and retrieving secrets from Vault KV v1 engine
+- **HTTPS Support**: Secure communication with Vault servers over TLS/SSL
+- **Custom CA Certificates**: Support for enterprise and self-signed certificate authorities
+- **Token Authentication**: Secure authentication using Vault tokens
+- **Path Mapping**: Automatic mapping of KBS resource descriptors to Vault paths
+
+## Setup
+
+### 1. Enable the Vault Feature
+
+Build the KBS with the `vault` cargo feature enabled:
+
+```bash
+cd kbs
+
+# Using the Makefile
+make VAULT=true
+
+# Or directly with cargo
+cargo build --features vault
+```
+
+### 2. Configure Vault or OpenBao Access
+
+Ensure your Vault or OpenBao instance is running and accessible. The backend requires:
+
+- A running Vault or OpenBao server with KV v1 engine enabled
+- A valid token with appropriate permissions
+- Network connectivity from KBS to the server
+
+The following examples use the `vault` CLI. If you use OpenBao, substitute
+`openbao` for `vault` in each command; the arguments and behavior are the same.
+
+#### Vault / OpenBao Configuration Example
+
+```bash
+# Enable KV v1 engine (if not already enabled)
+vault secrets enable -version=1 -path=kv kv
+
+# Create a policy for KBS access
+vault policy write kbs-policy - <<EOF
+path "kv/*" {
+  capabilities = ["create", "read", "update", "delete", "list"]
+}
+EOF
+
+# Create a token for KBS
+vault token create -policy=kbs-policy
+```
+
+### 3. Configure KBS
+
+Add the Vault configuration to your KBS config file (e.g., `kbs-config.toml`):
+
+```toml
+[[plugins]]
+name = "resource"
+type = "Vault"
+vault_url = "https://vault.example.com:8200"
+token = "hvs.your-vault-token-here"
+mount_path = "kv"                              # Optional, defaults to "secret"
+verify_ssl = true                              # Optional, defaults to false
+ca_certs = ["/path/to/ca-bundle.pem"]          # Optional, custom CA certificates
+```
+
+### 4. Start Trustee
+
+```bash
+# Using docker-compose
+docker compose up
+
+# Or directly
+../target/release/kbs --config-file /path/to/kbs-config.toml
+```
+
+## Configuration Options
+
+| Property      | Type           | Required | Description                                              | Default     |
+|---------------|----------------|----------|----------------------------------------------------------|-------------|
+| `vault_url`   | String         | Yes      | Vault or OpenBao server URL (HTTP or HTTPS)              | -           |
+| `token`       | String         | Yes      | Vault or OpenBao authentication token                    | -           |
+| `mount_path`  | String         | No       | KV v1 mount path                                         | `"secret"`  |
+| `verify_ssl`  | Boolean        | No       | Enable/disable SSL certificate verification              | `false`     |
+| `ca_certs`    | Array[String]  | No       | Paths to custom CA certificate files                     | `None`      |
+
+### HTTPS Configuration
+
+The backend supports secure HTTPS communication with comprehensive TLS configuration options:
+
+#### Basic HTTPS (Default)
+
+```toml
+[[plugins]]
+name = "resource"
+type = "Vault"
+vault_url = "https://vault.example.com:8200"
+token = "hvs.your-vault-token-here"
+verify_ssl = true
+```
+
+#### Custom CA Certificates
+
+For enterprise environments with custom certificate authorities:
+
+```toml
+[[plugins]]
+name = "resource"
+type = "Vault"
+vault_url = "https://vault.mycompany.com:8200"
+token = "hvs.your-vault-token-here"
+verify_ssl = true
+ca_certs = [
+    "/etc/ssl/certs/company-ca.pem",
+    "/opt/vault/tls/vault-ca.pem"
+]
+```
+
+#### Development/Testing (Disable SSL Verification)
+
+```toml
+[[plugins]]
+name = "resource"
+type = "Vault"
+vault_url = "http://vault-dev.mycompany.com:8200"
+token = "hvs.your-vault-token-here"
+verify_ssl = false
+```
+
+## Path Mapping
+
+The backend automatically maps KBS resource descriptors to Vault/OpenBao paths using the following format:
+
+```bash
+{repository_name}/{resource_type}/{resource_tag}
+```
+
+The secret value is stored against the key "data".
+
+
+### Examples
+
+| KBS Resource Request | Vault Path |
+|---------------------|------------|
+| Repository: `default`, Type: `key`, Tag: `encryption-key-1` | `default/key/encryption-key-1` |
+| Repository: `app1`, Type: `cert`, Tag: `tls-cert` | `app1/cert/tls-cert` |
+| Repository: `prod`, Type: `secret`, Tag: `db-password` | `prod/secret/db-password` |
+
+The actual secret value is stored under the key `data` at the given path. For example,
+the secret is the value of the key `data` at `prod/secret/db-password`.
+
+## Token Requirements
+
+The token used by KBS must have the following capabilities for the configured mount path
+(whether the server is Vault or OpenBao):
+
+```hcl
+path "{mount_path}/*" {
+  capabilities = ["create", "read", "update", "delete", "list"]
+}
+```
+
+### Example Vault Policies
+
+#### Minimal Policy (KV v1 at default "secret" mount)
+
+```hcl
+path "secret/*" {
+  capabilities = ["create", "read", "update", "delete"]
+}
+```
+
+#### Custom Mount Path
+
+```hcl
+path "kv/*" {
+  capabilities = ["create", "read", "update", "delete", "list"]
+}
+```
+
+#### Restricted Access (Read-Only)
+
+```hcl
+path "secret/*" {
+  capabilities = ["read"]
+}
+```
+
+## Troubleshooting
+
+### Debug Logging
+
+Enable debug logging to troubleshoot issues:
+
+```bash
+RUST_LOG=debug ./target/release/kbs --config-file /path/to/kbs-config.toml
+```
+
+## Testing
+
+The backend includes integration tests that use
+[OpenBao](https://openbao.org/), an open-source, API-compatible fork of
+HashiCorp Vault maintained by the Linux Foundation. The test Makefile
+automatically downloads the OpenBao binary and starts a local server.
+
+To run the tests without SSL setup:
+
+```sh
+cd kbs/test
+make test-vault-nossl
+make stop-vault
+```
+
+To run the tests with SSL setup:
+
+```sh
+cd kbs/test
+make test-vault-ssl
+make stop-vault-ssl
+```
+
+## Limitations
+
+- **KV v1 Support**: Currently only supports KV v1 engine
+- **Authentication Methods**: Only token authentication is supported
+- **Mount Points**: Single mount point per instance
+- **Binary Data**: All data is stored as UTF-8 strings
+
+## Related Documentation
+
+- [HashiCorp Vault Documentation](https://developer.hashicorp.com/vault/docs)
+- [Vault KV v1 Secret Engine](https://developer.hashicorp.com/vault/docs/secrets/kv/kv-v1)
+- [OpenBao Documentation](https://openbao.org/docs)
+- [OpenBao KV v1 API](https://openbao.org/api-docs/secret/kv/kv-v1/)

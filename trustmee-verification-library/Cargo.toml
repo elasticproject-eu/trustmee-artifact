@@ -1,0 +1,45 @@
+[package]
+name = "wasm-verification-component"
+version = "0.1.0"
+edition = "2021"
+description = "Minimal evidence-only attestation verifier host for Trustee verifier components"
+license = "Apache-2.0"
+
+[dependencies]
+anyhow = "1.0"
+asn1-rs = "0.7.1"
+base64 = "0.22.1"
+ciborium = "0.2.2"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+clap = { version = "4", features = ["derive"] }
+cmw = "0.1.0"
+futures-util = "0.3"
+hex = "0.4.3"
+hyper = { version = "1", default-features = false }
+openssl = "0.10.75"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sev = { git = "https://github.com/virtee/sev", rev = "d487809188c3c92e397bc92e2cb2a85eb982c980", default-features = false, features = ["openssl", "snp", "serde"] }
+sha2 = "0.10"
+strum = { version = "0.27", features = ["derive"] }
+tokio = { version = "1", features = ["fs", "io-util", "net", "rt", "sync", "time"] }
+tracing = "0.1.43"
+wasm-pkg-client = "0.15"
+wasmsign2 = "0.2.7"
+wasmtime = { version = "41", features = ["component-model"] }
+wasmtime-wasi = { version = "41" }
+wasmtime-wasi-http = { version = "41" }
+x509-parser = "0.18.0"
+
+[dev-dependencies]
+bytes = "1"
+http-body-util = "0.1"
+
+[[bin]]
+name = "snp-native-perf-eval"
+path = "perf-eval/snp_native_perf.rs"
+
+[[bin]]
+name = "snp-perf-eval"
+path = "perf-eval/snp_perf.rs"
