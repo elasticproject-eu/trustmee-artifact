@@ -3,7 +3,7 @@
     {
       "allow_network": false,
       "fuel": -1,
-      "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEACSEfytOWyv+aPNkyiej2bcnYPR/LFzlbLmDUmc6HFWc=\n-----END PUBLIC KEY-----\n",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAeO6e6M3OSX/Domuv/sTYHAY+LRmiICsywrjhgjQnJEI=\n-----END PUBLIC KEY-----\n",
       "valid_until": "2035-01-01T00:00:00Z"
     }
   ]

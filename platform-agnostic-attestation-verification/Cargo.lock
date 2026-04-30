@@ -10517,6 +10517,7 @@ dependencies = [
  "tokio",
  "tracing",
  "wasm-pkg-client",
+ "wasmparser 0.243.0",
  "wasmsign2",
  "wasmtime",
  "wasmtime-wasi",

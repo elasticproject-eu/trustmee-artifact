@@ -41,6 +41,15 @@ fn assert_tee_type(result: &serde_json::Value, expected: &str) {
     assert_eq!(result["tee_type"].as_str(), Some(expected));
 }
 
+fn assert_no_component_signature_public_key(result: &serde_json::Value) {
+    assert!(
+        result
+            .get("verifier_component_signature_public_key")
+            .is_none(),
+        "verifier components without a validated signature should not include a signature public-key claim"
+    );
+}
+
 #[test]
 fn sample_library_usage_with_snp_json_evidence() -> Result<(), Box<dyn std::error::Error>> {
     let project_root = project_root();
@@ -78,6 +87,7 @@ fn sample_library_usage_with_snp_json_evidence() -> Result<(), Box<dyn std::erro
         result["verifier_component_sha256"].as_str(),
         Some(expected_hash.as_str())
     );
+    assert_no_component_signature_public_key(&result);
     assert_snp_hex_claims(&result);
     assert!(
         result
@@ -130,6 +140,7 @@ fn sample_library_usage_with_snp_json_evidence_and_host_crypto_component(
         result["verifier_component_sha256"].as_str(),
         Some(expected_hash.as_str())
     );
+    assert_no_component_signature_public_key(&result);
     assert_snp_hex_claims(&result);
     assert!(
         result
@@ -179,8 +190,10 @@ fn sample_library_usage_with_sample_signed_snp_component_and_trust_store(
     };
 
     let result = verifier.verify_paths(component_path, evidence_path, None, None, &options)?;
-    let expected_hash = expected_component_hash(
-        &project_root.join("test_data/signature-demo/snp_verifier_component.signed.wasm"),
+    let expected_hash =
+        expected_component_hash(&project_root.join("test_data/snp_verifier_component.wasm"))?;
+    let expected_public_key = std::fs::read_to_string(
+        project_root.join("test_data/signature-demo/snp_verifier_component.public.pem"),
     )?;
 
     assert_eq!(result["reported_tcb_snp"], 23);
@@ -189,6 +202,10 @@ fn sample_library_usage_with_sample_signed_snp_component_and_trust_store(
     assert_eq!(
         result["verifier_component_sha256"].as_str(),
         Some(expected_hash.as_str())
+    );
+    assert_eq!(
+        result["verifier_component_signature_public_key"].as_str(),
+        Some(expected_public_key.as_str())
     );
     assert_snp_hex_claims(&result);
 
@@ -230,6 +247,7 @@ fn sample_library_usage_with_tdx_quote() -> Result<(), Box<dyn std::error::Error
         result["verifier_component_sha256"].as_str(),
         Some(expected_hash.as_str())
     );
+    assert_no_component_signature_public_key(&result);
     assert!(
         result
             .get("tcb_status")

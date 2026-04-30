@@ -2,9 +2,9 @@
 
 This project contains standalone WebAssembly verification components used by TrustMee project.
 
-- `bootloader-verifier/`: bootloader layer component (`bootloader-verifier-component`) that imports TDX verifier interface and verifies RTMR0/RTMR1 policy
 - `tdx-verifier/`: TDX-related items (`dcap-qvl-wasi`, `tdx-verifier-component`, `tdx-verifier-test`)
 - `snp-verifier/`: SNP-related items (`snp-verifier-component`, `snp-verifier-test`)
+- `tools/component-signer/`: adds TrustMee signature expiry metadata and signs verifier components with `wasmsign2`
 
 ## Build the component
 
@@ -19,6 +19,16 @@ For AMD SEV-SNP, use the builder script (it builds a containerized toolchain and
 `bash snp-verifier/snp-verifier-component/scripts/build-snp-wasm-component.sh`
 
 The resulting component is created at `target/wasm32-wasip2/release/snp_verifier_component.wasm`.
+
+## Sign a verifier component
+
+Use the component signer tool to add TrustMee expiry metadata and sign the component:
+
+`cargo run -p trustmee-component-signer -- sign --component target/wasm32-wasip2/release/snp_verifier_component.wasm --signed-component target/wasm32-wasip2/release/snp_verifier_component.signed.wasm --signature-expires-at 2035-01-01T00:00:00Z --generate-key --private-key-out component.private.pem --public-key-out component.public.pem --trust-store-out component.trust-store.json --valid-until 2035-01-01T00:00:00Z`
+
+To generate a key pair without signing:
+
+`cargo run -p trustmee-component-signer -- generate-key --private-key-out component.private.pem --public-key-out component.public.pem`
 
 For the layered bootloader verifier component (imports TDX verifier interface and exports the same interface):
 
@@ -37,12 +47,6 @@ The composed component is written to:
 
 
 ## Run the verifier (host-side)
-
-For Bootloader + TDX:
-
-Run bootloader verifier test host:
-
-`cargo run -p bootloader-verifier-test -- --component target/wasm32-wasip2/release/bootloader_tdx_verifier_component.wasm --evidence-json bootloader-verifier/test_data/bootloader_evidence.json`
 
 For Intel TDX:
 

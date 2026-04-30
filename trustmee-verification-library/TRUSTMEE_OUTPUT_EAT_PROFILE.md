@@ -50,7 +50,7 @@ Examples:
 - Type: text string
 - Required: yes
 - Value format: 64 lowercase hex characters
-- Meaning: SHA-256 digest of the verifier Wasm component bytes that produced the result
+- Meaning: SHA-256 digest of the original verifier Wasm component bytes that produced the result, before any embedded `wasmsign2` signature section or TrustMee signature-expiry metadata is applied
 
 ## Optional Claims
 
@@ -66,6 +66,13 @@ Examples:
 - Required: no
 - Meaning: validated report data digest or value promoted to the top-level envelope
 
+### `verifier_component_signature_public_key`
+
+- Type: text string
+- Required: no
+- Meaning: PEM public key that validated the embedded verifier-component signature
+- Presence: present only when an embedded verifier-component signature was validated against a trusted public key
+
 ## JSON Form
 
 ```json
@@ -77,6 +84,7 @@ Examples:
     "reported_tcb_snp": 23
   },
   "verifier_component_sha256": "<64 lowercase hex characters>",
+  "verifier_component_signature_public_key": "<optional PEM public key>",
   "init_data": "<optional>",
   "report_data": "<optional>"
 }
@@ -90,6 +98,7 @@ of the following hold:
 - `tee_type` is present and is a string.
 - `claims` is present and is a JSON object.
 - `verifier_component_sha256` is present and is a lowercase hex SHA-256 digest string.
+- If `verifier_component_signature_public_key` is present, it is a string.
 
 Additional claims MAY be present, but `trustmee-verification-library` currently
 defines only the claims listed above for this output envelope.

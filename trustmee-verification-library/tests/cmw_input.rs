@@ -7,6 +7,7 @@ use sev::{
     parser::ByteParser,
 };
 use sha2::{Digest, Sha256};
+use std::borrow::Cow;
 use std::{
     collections::BTreeMap,
     env, fs,
@@ -14,6 +15,7 @@ use std::{
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
+use wasm_encoder::Encode;
 use wasm_pkg_client::{
     Client as WasmPkgClient, Config as WasmPkgConfig, PackageRef as WasmPkgPackageRef,
     PublishOpts as WasmPkgPublishOpts, Version as WasmPkgVersion,
@@ -27,6 +29,7 @@ use wasmsign2::{KeyPair, Module, PublicKey};
 
 const CMW_INDICATOR_ENDORSEMENT: u64 = 1 << 1;
 const CMW_INDICATOR_EVIDENCE: u64 = 1 << 2;
+const COMPONENT_SIGNATURE_METADATA_SECTION_NAME: &str = "trustmee.component-signature-metadata";
 
 #[derive(Debug, Deserialize)]
 struct SnpEvidence {
@@ -117,6 +120,34 @@ fn sample_snp_evidence_json_bytes() -> Vec<u8> {
 }
 
 fn sign_component_bytes(component_bytes: &[u8]) -> (Vec<u8>, PublicKey) {
+    sign_component_bytes_with_expiry(component_bytes, "2030-01-01T00:00:00Z")
+}
+
+fn sign_component_bytes_with_expiry(
+    component_bytes: &[u8],
+    expires_at: &str,
+) -> (Vec<u8>, PublicKey) {
+    let key_pair = KeyPair::generate();
+    let public_key = key_pair.pk.clone().attach_default_key_id();
+    let key_id = public_key
+        .key_id()
+        .expect("attached default key id")
+        .clone();
+    let component_bytes = component_bytes_with_expiry_metadata(component_bytes, expires_at);
+    let module = Module::deserialize(&mut &component_bytes[..])
+        .expect("parse verifier component with signature expiry metadata");
+    let signed_module = key_pair
+        .sk
+        .sign(module, Some(&key_id))
+        .expect("sign verifier component");
+    let mut signed_component_bytes = Vec::new();
+    signed_module
+        .serialize(&mut signed_component_bytes)
+        .expect("serialize signed component");
+    (signed_component_bytes, public_key)
+}
+
+fn sign_component_bytes_without_expiry(component_bytes: &[u8]) -> (Vec<u8>, PublicKey) {
     let key_pair = KeyPair::generate();
     let public_key = key_pair.pk.clone().attach_default_key_id();
     let key_id = public_key
@@ -151,8 +182,10 @@ fn multi_sign_component_bytes(component_bytes: &[u8]) -> (Vec<u8>, Vec<PublicKey
         .expect("attached default key id")
         .clone();
 
+    let component_bytes =
+        component_bytes_with_expiry_metadata(component_bytes, "2030-01-01T00:00:00Z");
     let module = Module::deserialize(&mut &component_bytes[..])
-        .expect("parse verifier component as signable wasm payload");
+        .expect("parse verifier component with signature expiry metadata");
     let (first_signed_module, _) = first_key_pair
         .sk
         .sign_multi(module, Some(&first_key_id), false, false)
@@ -172,11 +205,53 @@ fn multi_sign_component_bytes(component_bytes: &[u8]) -> (Vec<u8>, Vec<PublicKey
     )
 }
 
+fn component_bytes_with_expiry_metadata(component_bytes: &[u8], expires_at: &str) -> Vec<u8> {
+    let metadata_payload = serde_json::to_vec(&json!({
+        "expires_at": expires_at,
+    }))
+    .expect("serialize signature expiry metadata");
+    let metadata_section = wasm_encoder::CustomSection {
+        name: Cow::Borrowed(COMPONENT_SIGNATURE_METADATA_SECTION_NAME),
+        data: Cow::Borrowed(&metadata_payload),
+    };
+    let mut metadata_section_bytes = vec![0];
+    metadata_section.encode(&mut metadata_section_bytes);
+
+    let mut output = Vec::with_capacity(component_bytes.len() + metadata_section_bytes.len());
+    output.extend_from_slice(&component_bytes[..8]);
+    output.extend_from_slice(&metadata_section_bytes);
+    output.extend_from_slice(&component_bytes[8..]);
+    output
+}
+
 fn assert_component_hash(result: &serde_json::Value, component_bytes: &[u8]) {
     let expected_hash = hex::encode(Sha256::digest(component_bytes));
     assert_eq!(
         result["verifier_component_sha256"].as_str(),
         Some(expected_hash.as_str())
+    );
+}
+
+fn assert_component_signature_public_key(result: &serde_json::Value, public_key: &PublicKey) {
+    let expected_public_key = public_key.to_pem();
+    assert_eq!(
+        result["verifier_component_signature_public_key"].as_str(),
+        Some(expected_public_key.as_str())
+    );
+    assert!(
+        claims(result)
+            .get("verifier_component_signature_public_key")
+            .is_none(),
+        "signature public-key claim should stay top-level in the final EAR"
+    );
+}
+
+fn assert_no_component_signature_public_key(result: &serde_json::Value) {
+    assert!(
+        result
+            .get("verifier_component_signature_public_key")
+            .is_none(),
+        "verifier components without a validated signature should not include a signature public-key claim"
     );
 }
 
@@ -491,6 +566,7 @@ fn verify_json_cmw_with_stapled_component_and_snp_collateral(
     assert_snp_basic_claims(&result);
     assert_tee_type(&result, "snp");
     assert_component_hash(&result, &component_bytes);
+    assert_no_component_signature_public_key(&result);
     Ok(())
 }
 
@@ -526,6 +602,7 @@ fn verify_json_cmw_with_stapled_plain_snp_component_and_snp_collateral(
     assert_snp_basic_claims(&result);
     assert_tee_type(&result, "snp");
     assert_component_hash(&result, &component_bytes);
+    assert_no_component_signature_public_key(&result);
     Ok(())
 }
 
@@ -561,6 +638,7 @@ fn verify_cbor_cmw_with_stapled_component_and_snp_collateral(
     assert_snp_basic_claims(&result);
     assert_tee_type(&result, "snp");
     assert_component_hash(&result, &component_bytes);
+    assert_no_component_signature_public_key(&result);
     Ok(())
 }
 
@@ -593,6 +671,7 @@ fn verify_json_cmw_with_stapled_tdx_component_and_quote() -> Result<(), Box<dyn 
     );
     assert_tee_type(&result, "tdx");
     assert_component_hash(&result, &component_bytes);
+    assert_no_component_signature_public_key(&result);
     assert!(
         claims(&result)
             .get("tcb_status")
@@ -631,6 +710,7 @@ fn verify_cmw_fetches_component_from_oci_hint() -> Result<(), Box<dyn std::error
     assert_snp_basic_claims(&result);
     assert_tee_type(&result, "snp");
     assert_component_hash(&result, &component_bytes);
+    assert_no_component_signature_public_key(&result);
     Ok(())
 }
 
@@ -958,8 +1038,101 @@ fn verify_cmw_accepts_signed_component_with_trusted_signer_policy(
     let result = verifier.verify_cmw_bytes(&cmw, None, None, &options)?;
     assert_snp_basic_claims(&result);
     assert_tee_type(&result, "snp");
-    assert_component_hash(&result, &signed_component_bytes);
+    assert_component_hash(&result, &component_bytes);
+    assert_component_signature_public_key(&result, &public_key);
     Ok(())
+}
+
+#[test]
+fn verify_cmw_rejects_signed_component_without_signature_expiry() {
+    let verifier = WasmVerificationComponent::new().expect("create verifier");
+    let component_bytes = host_crypto_component_bytes();
+    let (signed_component_bytes, public_key) =
+        sign_component_bytes_without_expiry(&component_bytes);
+    let component_id = component_id_for_component_bytes(&signed_component_bytes);
+    let (report_bytes, collateral_bytes) = snp_report_and_collateral();
+
+    let cmw = build_json_cmw(
+        &component_id,
+        &report_bytes,
+        "application/octet-stream",
+        vec![
+            (
+                "verifier",
+                "application/wasm",
+                signed_component_bytes,
+                CMW_INDICATOR_ENDORSEMENT,
+            ),
+            (
+                "snp-collateral",
+                SNP_COLLATERAL_MEDIA_TYPE,
+                collateral_bytes,
+                CMW_INDICATOR_ENDORSEMENT,
+            ),
+        ],
+    );
+
+    let mut options = default_options();
+    let trust_store = trust_store_path("trustmee-cmw-missing-signature-expiry");
+    write_trust_store(
+        &trust_store,
+        vec![(public_key.to_pem(), 1234, true, "2030-01-01T00:00:00Z")],
+    );
+    options.component_trust_store = Some(trust_store);
+
+    let err = verifier
+        .verify_cmw_bytes(&cmw, None, None, &options)
+        .expect_err("signed component without signature expiry must fail");
+    assert!(
+        format!("{err:#}").contains("missing required expiry metadata"),
+        "unexpected error: {err:#}"
+    );
+}
+
+#[test]
+fn verify_cmw_rejects_signed_component_with_expired_signature() {
+    let verifier = WasmVerificationComponent::new().expect("create verifier");
+    let component_bytes = host_crypto_component_bytes();
+    let (signed_component_bytes, public_key) =
+        sign_component_bytes_with_expiry(&component_bytes, "1970-01-01T00:00:01Z");
+    let component_id = component_id_for_component_bytes(&signed_component_bytes);
+    let (report_bytes, collateral_bytes) = snp_report_and_collateral();
+
+    let cmw = build_json_cmw(
+        &component_id,
+        &report_bytes,
+        "application/octet-stream",
+        vec![
+            (
+                "verifier",
+                "application/wasm",
+                signed_component_bytes,
+                CMW_INDICATOR_ENDORSEMENT,
+            ),
+            (
+                "snp-collateral",
+                SNP_COLLATERAL_MEDIA_TYPE,
+                collateral_bytes,
+                CMW_INDICATOR_ENDORSEMENT,
+            ),
+        ],
+    );
+
+    let mut options = default_options();
+    let trust_store = trust_store_path("trustmee-cmw-expired-signature");
+    write_trust_store(
+        &trust_store,
+        vec![(public_key.to_pem(), 1234, true, "2030-01-01T00:00:00Z")],
+    );
+    options.component_trust_store = Some(trust_store);
+
+    let err = verifier
+        .verify_cmw_bytes(&cmw, None, None, &options)
+        .expect_err("signed component with expired signature must fail");
+    assert!(
+        format!("{err:#}").contains("component signature expired"),
+        "unexpected error: {err:#}"
+    );
 }
 
 #[test]
@@ -1173,6 +1346,7 @@ fn verify_bytes_keeps_legacy_behavior_without_trust_store_and_accepts_trust_stor
     )?;
     assert_tee_type(&legacy_result, "snp");
     assert_eq!(legacy_result["reported_tcb_snp"], 23);
+    assert_no_component_signature_public_key(&legacy_result);
 
     let mut options = default_options();
     let trust_store = trust_store_path("trustmee-direct-trusted-signer");
@@ -1191,7 +1365,8 @@ fn verify_bytes_keeps_legacy_behavior_without_trust_store_and_accepts_trust_stor
     )?;
     assert_tee_type(&trusted_result, "snp");
     assert_eq!(trusted_result["reported_tcb_snp"], 23);
-    assert_component_hash(&trusted_result, &signed_component_bytes);
+    assert_component_hash(&trusted_result, &component_bytes);
+    assert_component_signature_public_key(&trusted_result, &public_key);
 
     Ok(())
 }

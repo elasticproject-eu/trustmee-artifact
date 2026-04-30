@@ -1,6 +1,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use component_signature::{
-    resolve_execution_policy_for_cmw, resolve_execution_policy_for_direct, ExecutionPolicy,
+    component_bytes_before_signature, resolve_execution_policy_for_cmw,
+    resolve_execution_policy_for_direct, ExecutionPolicy,
 };
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
@@ -45,6 +46,8 @@ const DEFAULT_COMPILED_COMPONENT_CACHE_CONFIG: &str = "wasmtime-cache-config.tom
 const TEE_TYPE_CLAIM: &str = "tee_type";
 const TRUSTMEE_CLAIMS_KEY: &str = "claims";
 const VERIFIER_COMPONENT_SHA256_CLAIM: &str = "verifier_component_sha256";
+const VERIFIER_COMPONENT_SIGNATURE_PUBLIC_KEY_CLAIM: &str =
+    "verifier_component_signature_public_key";
 const COMPONENT_TIMING_CLAIMS: &[&str] = &[
     "collateral_fetch_ms",
     "wasm_verify_ms",
@@ -101,6 +104,7 @@ impl LoadedWasmComponent {
 struct LoadedWasmComponentInner {
     pre: VerifierPre<HostState>,
     component_hash: [u8; 32],
+    component_claim_hash: [u8; 32],
     component_bytes: Arc<[u8]>,
     instantiated_components:
         Mutex<HashMap<InstantiatedComponentKey, Arc<Mutex<InstantiatedWasmComponent>>>>,
@@ -278,6 +282,8 @@ impl WasmVerificationComponent {
                 component_hash[0], component_hash[1], component_hash[2], component_hash[3]
             );
         }
+        let component_claim_hash =
+            hash_verifier_component_claim(component_bytes).context("hash verifier component")?;
 
         let load_start = std::time::Instant::now();
         let component = Component::from_binary(&self.engine, component_bytes)
@@ -288,6 +294,7 @@ impl WasmVerificationComponent {
             inner: Arc::new(LoadedWasmComponentInner {
                 pre,
                 component_hash,
+                component_claim_hash,
                 component_bytes: Arc::<[u8]>::from(component_bytes.to_vec()),
                 instantiated_components: Mutex::new(HashMap::new()),
             }),
@@ -375,7 +382,7 @@ impl WasmVerificationComponent {
             expected_init_data_hash,
             execution_policy,
             options,
-            &component.inner.component_hash,
+            &component.inner.component_claim_hash,
         )
     }
 
@@ -577,7 +584,7 @@ impl InstantiatedWasmComponent {
         expected_init_data_hash: Option<&[u8]>,
         execution_policy: &ExecutionPolicy,
         options: &VerifyOptions,
-        component_hash: &[u8; 32],
+        component_claim_hash: &[u8; 32],
     ) -> Result<Value> {
         self.store
             .set_fuel(execution_policy.fuel)
@@ -621,7 +628,13 @@ impl InstantiatedWasmComponent {
             return Err(anyhow!("attestation verification failed: {err}"));
         }
 
-        let mut value = add_verifier_component_hash_claim(value, component_hash);
+        let mut value = add_verifier_component_claims(
+            value,
+            component_claim_hash,
+            execution_policy
+                .verifier_component_signature_public_key
+                .as_deref(),
+        );
         reemit_component_step_timings(&value);
         strip_component_timing_claims(&mut value);
         Ok(value)
@@ -632,12 +645,27 @@ fn hash_component(component_bytes: &[u8]) -> [u8; 32] {
     Sha256::digest(component_bytes).into()
 }
 
-fn add_verifier_component_hash_claim(mut value: Value, component_hash: &[u8; 32]) -> Value {
+fn hash_verifier_component_claim(component_bytes: &[u8]) -> Result<[u8; 32]> {
+    let component_bytes = component_bytes_before_signature(component_bytes)?;
+    Ok(hash_component(component_bytes.as_ref()))
+}
+
+fn add_verifier_component_claims(
+    mut value: Value,
+    component_hash: &[u8; 32],
+    signature_public_key: Option<&str>,
+) -> Value {
     if let Some(claims) = value.as_object_mut() {
         claims.insert(
             VERIFIER_COMPONENT_SHA256_CLAIM.to_string(),
             Value::String(hex::encode(component_hash)),
         );
+        if let Some(signature_public_key) = signature_public_key {
+            claims.insert(
+                VERIFIER_COMPONENT_SIGNATURE_PUBLIC_KEY_CLAIM.to_string(),
+                Value::String(signature_public_key.to_string()),
+            );
+        }
     }
 
     value
@@ -654,6 +682,10 @@ fn transform_trustmee_claims(input_claims: Value) -> Result<Value> {
     let tee_type = remove_required_string_claim(&mut claims_map, TEE_TYPE_CLAIM)?;
     let verifier_component_sha256 =
         remove_required_string_claim(&mut claims_map, VERIFIER_COMPONENT_SHA256_CLAIM)?;
+    let verifier_component_signature_public_key = remove_optional_string_claim(
+        &mut claims_map,
+        VERIFIER_COMPONENT_SIGNATURE_PUBLIC_KEY_CLAIM,
+    )?;
     strip_component_timing_claims_from_map(&mut claims_map);
 
     let mut trustmee_claims = Map::new();
@@ -673,6 +705,12 @@ fn transform_trustmee_claims(input_claims: Value) -> Result<Value> {
         VERIFIER_COMPONENT_SHA256_CLAIM.to_string(),
         Value::String(verifier_component_sha256),
     );
+    if let Some(public_key) = verifier_component_signature_public_key {
+        trustmee_claims.insert(
+            VERIFIER_COMPONENT_SIGNATURE_PUBLIC_KEY_CLAIM.to_string(),
+            Value::String(public_key),
+        );
+    }
 
     Ok(Value::Object(trustmee_claims))
 }
@@ -704,6 +742,17 @@ fn remove_required_string_claim(
         Some(Value::String(value)) => Ok(value),
         Some(_) => bail!("trustmee claim `{claim_name}` must be a string"),
         None => bail!("trustmee claims must include `{claim_name}`"),
+    }
+}
+
+fn remove_optional_string_claim(
+    claims_map: &mut Map<String, Value>,
+    claim_name: &str,
+) -> Result<Option<String>> {
+    match claims_map.remove(claim_name) {
+        Some(Value::String(value)) => Ok(Some(value)),
+        Some(_) => bail!("trustmee claim `{claim_name}` must be a string"),
+        None => Ok(None),
     }
 }
 
@@ -1207,7 +1256,8 @@ mod tests {
             "signature_ms": 4.0,
             "others_ms": 5.5,
             "total_ms": 13.25,
-            "verifier_component_sha256": "deadbeef"
+            "verifier_component_sha256": "deadbeef",
+            "verifier_component_signature_public_key": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n"
         }))
         .expect("transform trustmee claims");
 
@@ -1222,7 +1272,8 @@ mod tests {
                     "measurement": "012345",
                     "reported_tcb_snp": 23
                 },
-                "verifier_component_sha256": "deadbeef"
+                "verifier_component_sha256": "deadbeef",
+                "verifier_component_signature_public_key": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n"
             })
         );
     }

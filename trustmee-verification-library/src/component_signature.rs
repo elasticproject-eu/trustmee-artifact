@@ -6,20 +6,25 @@ use base64::{
 use chrono::DateTime;
 use serde::Deserialize;
 use std::{
+    borrow::Cow,
     collections::HashSet,
     fs,
+    ops::Range,
     path::Path,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use wasmsign2::{signature_info_from_reader, PublicKey, PublicKeySet, WSError};
+use wasmparser::{Chunk, Parser, Payload};
+use wasmsign2::{signature_info_from_reader, Module, PublicKey, PublicKeySet, WSError};
 
 pub(crate) const DEFAULT_UNSIGNED_COMPONENT_FUEL: u64 = 1_000_000_000;
 const UNLIMITED_FUEL_SENTINEL: i64 = -1;
+const COMPONENT_SIGNATURE_METADATA_SECTION_NAME: &str = "trustmee.component-signature-metadata";
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ExecutionPolicy {
     pub(crate) fuel: u64,
     pub(crate) network_allowed: bool,
+    pub(crate) verifier_component_signature_public_key: Option<String>,
 }
 
 impl ExecutionPolicy {
@@ -27,6 +32,7 @@ impl ExecutionPolicy {
         Self {
             fuel: u64::MAX,
             network_allowed: true,
+            verifier_component_signature_public_key: None,
         }
     }
 
@@ -41,6 +47,7 @@ impl ExecutionPolicy {
         Self {
             fuel: DEFAULT_UNSIGNED_COMPONENT_FUEL,
             network_allowed,
+            verifier_component_signature_public_key: None,
         }
     }
 }
@@ -79,6 +86,11 @@ enum ComponentSignatureState {
     Signed,
 }
 
+#[derive(Debug, Deserialize)]
+struct ComponentSignatureMetadata {
+    expires_at: String,
+}
+
 pub(crate) fn resolve_execution_policy_for_cmw(
     component_bytes: &[u8],
     trust_store_path: Option<&Path>,
@@ -101,17 +113,61 @@ pub(crate) fn resolve_execution_policy_for_direct(
     trust_store_path: Option<&Path>,
     now: SystemTime,
 ) -> Result<ExecutionPolicy> {
-    let Some(trust_store_path) = trust_store_path else {
-        return Ok(ExecutionPolicy::legacy_unrestricted());
-    };
-
     match component_signature_state(component_bytes)? {
-        ComponentSignatureState::Unsigned => Ok(ExecutionPolicy::unsigned_default()),
+        ComponentSignatureState::Unsigned => {
+            if trust_store_path.is_some() {
+                Ok(ExecutionPolicy::unsigned_default())
+            } else {
+                Ok(ExecutionPolicy::legacy_unrestricted())
+            }
+        }
         ComponentSignatureState::Signed => {
-            let trust_store = TrustStore::from_file(trust_store_path)?;
-            trust_store.resolve_signed_execution_policy(component_bytes, now)
+            ensure_component_signature_not_expired(component_bytes, now)?;
+            if let Some(trust_store_path) = trust_store_path {
+                let trust_store = TrustStore::from_file(trust_store_path)?;
+                trust_store.resolve_signed_execution_policy(component_bytes, now)
+            } else {
+                Ok(ExecutionPolicy::legacy_unrestricted())
+            }
         }
     }
+}
+
+pub(crate) fn component_bytes_before_signature(component_bytes: &[u8]) -> Result<Cow<'_, [u8]>> {
+    match component_signature_state(component_bytes)? {
+        ComponentSignatureState::Unsigned => Ok(Cow::Borrowed(component_bytes)),
+        ComponentSignatureState::Signed => {
+            let module = Module::deserialize(&mut &component_bytes[..])
+                .context("deserialize signed verifier component")?;
+            let (unsigned_module, _) = module
+                .detach_signature()
+                .context("detach embedded verifier component signature")?;
+            let mut unsigned_bytes = Vec::new();
+            unsigned_module
+                .serialize(&mut unsigned_bytes)
+                .context("serialize verifier component without embedded signature")?;
+            let unsigned_bytes = strip_component_signature_metadata(&unsigned_bytes)?;
+            Ok(Cow::Owned(unsigned_bytes))
+        }
+    }
+}
+
+fn strip_component_signature_metadata(component_bytes: &[u8]) -> Result<Vec<u8>> {
+    let metadata_sections = component_signature_metadata_sections(component_bytes)?;
+    if metadata_sections.is_empty() {
+        return Ok(component_bytes.to_vec());
+    }
+
+    let mut stripped = Vec::with_capacity(component_bytes.len());
+    let mut last = 0;
+
+    for (range, _) in metadata_sections {
+        stripped.extend_from_slice(&component_bytes[last..range.start]);
+        last = range.end;
+    }
+
+    stripped.extend_from_slice(&component_bytes[last..]);
+    Ok(stripped)
 }
 
 fn component_signature_state(component_bytes: &[u8]) -> Result<ComponentSignatureState> {
@@ -173,6 +229,8 @@ impl TrustStore {
         component_bytes: &[u8],
         now: SystemTime,
     ) -> Result<ExecutionPolicy> {
+        ensure_component_signature_not_expired(component_bytes, now)?;
+
         let matching_signers = self
             .matching_signers(component_bytes)
             .context("verify embedded component signature against trust store")?;
@@ -209,6 +267,7 @@ impl TrustStore {
         Ok(ExecutionPolicy {
             fuel: signer.fuel,
             network_allowed: signer.network_allowed,
+            verifier_component_signature_public_key: Some(signer.public_key.to_pem()),
         })
     }
 
@@ -238,6 +297,85 @@ impl TrustStore {
             .filter(|signer| valid_public_keys.contains(&&signer.public_key))
             .collect())
     }
+}
+
+fn ensure_component_signature_not_expired(component_bytes: &[u8], now: SystemTime) -> Result<()> {
+    let expires_at = component_signature_expires_at(component_bytes)?;
+    if now > expires_at {
+        bail!("component signature expired");
+    }
+
+    Ok(())
+}
+
+fn component_signature_expires_at(component_bytes: &[u8]) -> Result<SystemTime> {
+    let mut metadata_sections = component_signature_metadata_payloads(component_bytes)?.into_iter();
+
+    let metadata_payload = metadata_sections
+        .next()
+        .ok_or_else(|| anyhow!("component signature is missing required expiry metadata"))?;
+    if metadata_sections.next().is_some() {
+        bail!("component signature has multiple expiry metadata sections");
+    }
+
+    let metadata: ComponentSignatureMetadata = serde_json::from_slice(metadata_payload)
+        .context("parse component signature expiry metadata")?;
+    parse_valid_until(&metadata.expires_at).context("parse component signature expires_at")
+}
+
+fn component_signature_metadata_payloads<'a>(component_bytes: &'a [u8]) -> Result<Vec<&'a [u8]>> {
+    Ok(component_signature_metadata_sections(component_bytes)?
+        .into_iter()
+        .map(|(_, data)| data)
+        .collect())
+}
+
+fn component_signature_metadata_sections<'a>(
+    component_bytes: &'a [u8],
+) -> Result<Vec<(Range<usize>, &'a [u8])>> {
+    let mut metadata_sections = Vec::new();
+    let mut parser = Parser::new(0);
+    let mut input = component_bytes;
+    let mut input_offset = 0;
+
+    loop {
+        let chunk = parser
+            .parse(input, true)
+            .context("parse verifier component section")?;
+        let Chunk::Parsed { payload, consumed } = chunk else {
+            bail!("verifier component parser unexpectedly requested more data");
+        };
+
+        let section_start = input_offset;
+        input_offset += consumed;
+        input = &component_bytes[input_offset..];
+
+        match payload {
+            Payload::CustomSection(section)
+                if section.name() == COMPONENT_SIGNATURE_METADATA_SECTION_NAME =>
+            {
+                metadata_sections.push((section_start..input_offset, section.data()));
+            }
+            Payload::CodeSectionStart { size, .. } => {
+                parser.skip_section();
+                input_offset += size as usize;
+                input = &component_bytes[input_offset..];
+            }
+            Payload::ModuleSection {
+                unchecked_range, ..
+            }
+            | Payload::ComponentSection {
+                unchecked_range, ..
+            } => {
+                input_offset = unchecked_range.end;
+                input = &component_bytes[input_offset..];
+            }
+            Payload::End(_) => break,
+            _ => {}
+        }
+    }
+
+    Ok(metadata_sections)
 }
 
 fn parse_fuel(raw_fuel: i64) -> Result<u64> {
@@ -298,14 +436,17 @@ fn decode_base64_variants(value: &str) -> Vec<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_fuel, parse_valid_until, resolve_execution_policy_for_cmw,
-        resolve_execution_policy_for_direct, ExecutionPolicy, DEFAULT_UNSIGNED_COMPONENT_FUEL,
+        component_bytes_before_signature, parse_fuel, parse_valid_until,
+        resolve_execution_policy_for_cmw, resolve_execution_policy_for_direct, ExecutionPolicy,
+        COMPONENT_SIGNATURE_METADATA_SECTION_NAME, DEFAULT_UNSIGNED_COMPONENT_FUEL,
     };
     use std::{
+        borrow::Cow,
         fs,
         path::PathBuf,
         time::{Duration, SystemTime, UNIX_EPOCH},
     };
+    use wasm_encoder::Encode;
     use wasmsign2::{KeyPair, Module};
 
     fn project_root() -> PathBuf {
@@ -318,6 +459,53 @@ mod tests {
     }
 
     fn signed_component_and_public_key() -> (Vec<u8>, wasmsign2::PublicKey) {
+        signed_component_and_public_key_with_expiry("2030-01-01T00:00:00Z")
+    }
+
+    fn signed_component_and_public_key_with_expiry(
+        expires_at: &str,
+    ) -> (Vec<u8>, wasmsign2::PublicKey) {
+        let component_bytes = sample_component_bytes();
+        let key_pair = KeyPair::generate();
+        let public_key = key_pair.pk.clone().attach_default_key_id();
+        let key_id = public_key
+            .key_id()
+            .expect("attached default key id")
+            .clone();
+        let component_bytes = component_bytes_with_expiry_metadata(&component_bytes, expires_at);
+        let module = Module::deserialize(&mut &component_bytes[..])
+            .expect("parse component with expiry metadata for signing");
+        let signed_module = key_pair
+            .sk
+            .sign(module, Some(&key_id))
+            .expect("sign component bytes");
+        let mut signed_bytes = Vec::new();
+        signed_module
+            .serialize(&mut signed_bytes)
+            .expect("serialize signed component");
+        (signed_bytes, public_key)
+    }
+
+    fn component_bytes_with_expiry_metadata(component_bytes: &[u8], expires_at: &str) -> Vec<u8> {
+        let metadata_payload = serde_json::to_vec(&serde_json::json!({
+            "expires_at": expires_at,
+        }))
+        .expect("serialize signature expiry metadata");
+        let metadata_section = wasm_encoder::CustomSection {
+            name: Cow::Borrowed(COMPONENT_SIGNATURE_METADATA_SECTION_NAME),
+            data: Cow::Borrowed(&metadata_payload),
+        };
+        let mut metadata_section_bytes = vec![0];
+        metadata_section.encode(&mut metadata_section_bytes);
+
+        let mut output = Vec::with_capacity(component_bytes.len() + metadata_section_bytes.len());
+        output.extend_from_slice(&component_bytes[..8]);
+        output.extend_from_slice(&metadata_section_bytes);
+        output.extend_from_slice(&component_bytes[8..]);
+        output
+    }
+
+    fn signed_component_without_expiry_and_public_key() -> (Vec<u8>, wasmsign2::PublicKey) {
         let component_bytes = sample_component_bytes();
         let key_pair = KeyPair::generate();
         let public_key = key_pair.pk.clone().attach_default_key_id();
@@ -396,6 +584,20 @@ mod tests {
     }
 
     #[test]
+    fn component_bytes_before_signature_returns_unsigned_bytes() {
+        let component_bytes = sample_component_bytes();
+        let (signed_component_bytes, _public_key) = signed_component_and_public_key();
+
+        let unsigned_from_plain =
+            component_bytes_before_signature(&component_bytes).expect("unsigned component bytes");
+        assert_eq!(unsigned_from_plain.as_ref(), component_bytes.as_slice());
+
+        let unsigned_from_signed = component_bytes_before_signature(&signed_component_bytes)
+            .expect("detach signed component bytes");
+        assert_eq!(unsigned_from_signed.as_ref(), component_bytes.as_slice());
+    }
+
+    #[test]
     fn resolve_execution_policy_for_direct_without_trust_store_is_legacy() {
         let component_bytes = sample_component_bytes();
         let policy = resolve_execution_policy_for_direct(
@@ -421,6 +623,7 @@ mod tests {
             ExecutionPolicy {
                 fuel: DEFAULT_UNSIGNED_COMPONENT_FUEL,
                 network_allowed: false,
+                verifier_component_signature_public_key: None,
             }
         );
     }
@@ -436,6 +639,43 @@ mod tests {
         .expect_err("signed component without trust store must fail");
         assert!(
             format!("{err:#}").contains("no component trust store"),
+            "unexpected error: {err:#}"
+        );
+    }
+
+    #[test]
+    fn resolve_execution_policy_for_signed_component_rejects_missing_signature_expiry() {
+        let (signed_component_bytes, public_key) = signed_component_without_expiry_and_public_key();
+        let trust_store =
+            trust_store_file(&[public_key.to_pem()], 1234, true, "2030-01-01T00:00:00Z");
+
+        let err = resolve_execution_policy_for_cmw(
+            &signed_component_bytes,
+            Some(&trust_store),
+            UNIX_EPOCH + Duration::from_secs(1),
+        )
+        .expect_err("signed component without expiry metadata must fail");
+        assert!(
+            format!("{err:#}").contains("missing required expiry metadata"),
+            "unexpected error: {err:#}"
+        );
+    }
+
+    #[test]
+    fn resolve_execution_policy_for_signed_component_rejects_expired_signature() {
+        let (signed_component_bytes, public_key) =
+            signed_component_and_public_key_with_expiry("1970-01-01T00:00:01Z");
+        let trust_store =
+            trust_store_file(&[public_key.to_pem()], 1234, true, "2030-01-01T00:00:00Z");
+
+        let err = resolve_execution_policy_for_cmw(
+            &signed_component_bytes,
+            Some(&trust_store),
+            UNIX_EPOCH + Duration::from_secs(2),
+        )
+        .expect_err("signed component with expired signature metadata must fail");
+        assert!(
+            format!("{err:#}").contains("component signature expired"),
             "unexpected error: {err:#}"
         );
     }
@@ -457,6 +697,7 @@ mod tests {
             ExecutionPolicy {
                 fuel: 1234,
                 network_allowed: true,
+                verifier_component_signature_public_key: Some(public_key.to_pem()),
             }
         );
     }

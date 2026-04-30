@@ -11,7 +11,6 @@ Normative format documents:
 
 - [TrustMee](../platform-agnostic-attestation-verification) is a modified Trustee implementation that integrates TrustMee as a verifier driver and uses this repository as its verification library.
 - [wasm-verification-components](../wasm-verification-components) contains the Wasm verification components that this verifier host can execute.
-- [trustmee-input](../attestation-input-for-trustmee) is a library for generating trustmee evidence CMW.
 
 ## Input model
 
@@ -81,15 +80,18 @@ Notes:
 
 - `public_key` accepts PEM or OpenSSH text. Hex, base64, and base64url encodings of raw `wasmsign2` key bytes are accepted too.
 - `fuel = -1` means unlimited Wasmtime fuel. Any other value must be a non-negative integer.
-- `valid_until` must be an RFC3339 UTC timestamp.
+- `valid_until` must be an RFC3339 UTC timestamp for the trust-store signer entry.
+- Signed components must also carry embedded TrustMee signature expiry metadata. Use `wasm-verification-components`' `trustmee-component-signer` tool to add `--signature-expires-at` before signing with `wasmsign2`.
 
 Execution policy:
 
 - CMW verification is restrictive by default.
 - An unsigned component runs with `1_000_000_000` Wasmtime fuel and no outbound network access.
-- A signed component must verify against exactly one trusted, unexpired signer entry. That entry decides the `fuel` limit and whether outbound network access is allowed.
-- If a signature is present but invalid, expired, untrusted, or ambiguous, verification fails before the component is instantiated.
+- A signed component must verify against exactly one trusted, unexpired signer entry, and its embedded signature expiry metadata must be present and unexpired. The signer entry decides the `fuel` limit and whether outbound network access is allowed.
+- If a signature is present but invalid, missing expiry metadata, expired, untrusted, or ambiguous, verification fails before the component is instantiated.
 - Direct `verify_bytes` and `verify_paths` calls keep legacy behavior unless a trust store is explicitly supplied.
+- Result claim `verifier_component_sha256` is computed over the original component bytes after stripping the embedded signature section and TrustMee signature-expiry metadata. When a signature is validated, `verifier_component_signature_public_key` carries the trusted public key used for that validation.
+- CMW component cache identity still uses the exact `component_id` digest from the input, including embedded signature and expiry metadata.
 
 ## OCI package mapping
 
