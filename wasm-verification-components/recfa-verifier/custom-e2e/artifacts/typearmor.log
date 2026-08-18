@@ -1,0 +1,2157 @@
+object[0] = /opt/typearmor/server-bins/prog > /opt/typearmor/out/binfo.prog
+* Analyzing function _init
+- basicblock 0x400440 - 0x40044e
+- basicblock 0x400450 - 0x400450
+- basicblock 0x400452 - 0x400456
+  - Analyzing block 0x400440 - 0x40044e
+      0x400440: sub RSP, 8
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x400444: mov RAX, [RIP + 200ba5]
+      [dereference read-operand]: [RIP + 200ba5]
+              : (8): RAX -> write
+      0x40044b: test RAX, RAX
+              : (8): RAX -> read 
+              : (8): RAX -> read 
+      0x40044e: jz 2 + RIP + 2
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: clear
+      RAX: write
+    > edges: 2
+    > Getting target of edge
+  - Analyzing block 0x400450 - 0x400450
+      0x400450: call RAX
+              : (6): RSP -> read 
+              : (8): RAX -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: clear
+      RAX: read 
+    > edges: 1
+    > Not following indirect call edge, looking at fallthrough bb instead
+  - Analyzing block 0x400452 - 0x400456
+      0x400452: add RSP, 8
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x400456: ret near [RSP]
+      [dereference read-operand]: [RSP]
+setting deref
+              : (6): RSP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: clear
+      RAX: clear
+    > edges: 1
+    > Not following return edge
+    > Getting target of edge
+    > next bb is already analyzed
+    Function summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: clear
+      RAX: write
+* Skipping analysis of function fclose
+* Skipping analysis of function fprintf
+* Skipping analysis of function fopen
+* Analyzing function _start
+- basicblock 0x4004a0 - 0x4004c4
+- basicblock 0x4004ca - 0x4004ca
+  - Analyzing block 0x4004a0 - 0x4004c4
+      0x4004a0: xor EBP, EBP
+              : (7): RBP -> read 
+              : (7): RBP -> read 
+              : (7): RBP -> write
+      0x4004a2: mov R9, RDX
+              : (2): RDX -> read 
+              : (5): R9  -> write
+      0x4004a5: pop RSI, RSP
+              : (6): RSP -> read 
+              : (1): RSI -> write
+              : (6): RSP -> write
+      0x4004a6: mov RDX, RSP
+              : (6): RSP -> read 
+              : (2): RDX -> write
+      0x4004a9: and RSP, fffffffffffffff0
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x4004ad: push RAX, RSP
+              : (8): RAX -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x4004ae: push RSP, RSP
+              : (6): RSP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x4004af: mov R8, 4007a0
+              : (4): R8  -> write
+      0x4004b6: mov RCX, 400730
+              : (3): RCX -> write
+      0x4004bd: mov RDI, 400651
+              : (0): RDI -> write
+      0x4004c4: call [RIP + 200b1e]
+      [dereference read-operand]: [RIP + 200b1e]
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: write
+      RSI: write
+      RDX: read 
+      RCX: write
+      R8 : write
+      R9 : write
+      RSP: r/w  
+      RBP: r/w  
+      RAX: read 
+    > edges: 1
+    > Not following indirect call edge, looking at fallthrough bb instead
+  - Analyzing block 0x4004ca - 0x4004ca
+      0x4004ca: hlt 
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: clear
+      RBP: clear
+      RAX: clear
+    > edges: 0
+    Function summary:
+      RDI: write
+      RSI: write
+      RDX: read 
+      RCX: write
+      R8 : write
+      R9 : write
+      RSP: r/w  
+      RBP: r/w  
+      RAX: read 
+* Analyzing function _dl_relocate_static_pie
+- basicblock 0x4004d0 - 0x4004d0
+  - Analyzing block 0x4004d0 - 0x4004d0
+      0x4004d0: REP ret near [RSP]
+      [dereference read-operand]: [RSP]
+setting deref
+              : (6): RSP -> read 
+              : (3): RCX -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+              : (3): RCX -> write
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: r/w  
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: clear
+      RAX: clear
+    > edges: 0
+    Function summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: r/w  
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: clear
+      RAX: clear
+* Analyzing function deregister_tm_clones
+- basicblock 0x4004e0 - 0x4004ef
+- basicblock 0x4004f1 - 0x4004f9
+- basicblock 0x4004fb - 0x400501
+- basicblock 0x400508 - 0x400509
+  - Analyzing block 0x4004e0 - 0x4004ef
+      0x4004e0: push RBP, RSP
+              : (7): RBP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x4004e1: mov EAX, 601040
+              : (8): RAX -> write
+      0x4004e6: cmp RAX, 601040
+              : (8): RAX -> read 
+      0x4004ec: mov RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> write
+      0x4004ef: jz 17 + RIP + 2
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+    > edges: 2
+    > Getting target of edge
+  - Analyzing block 0x400508 - 0x400509
+      0x400508: pop RBP, RSP
+              : (6): RSP -> read 
+              : (6): RSP -> write
+              : (7): RBP -> write
+      0x400509: ret near [RSP]
+      [dereference read-operand]: [RSP]
+setting deref
+              : (6): RSP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: write
+      RAX: clear
+    > edges: 0
+    > Getting target of edge
+  - Analyzing block 0x4004f1 - 0x4004f9
+      0x4004f1: mov EAX, 0
+              : (8): RAX -> write
+      0x4004f6: test RAX, RAX
+              : (8): RAX -> read 
+              : (8): RAX -> read 
+      0x4004f9: jz d + RIP + 2
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: clear
+      RBP: clear
+      RAX: write
+    > edges: 2
+    > Getting target of edge
+    > next bb is already analyzed
+    > Getting target of edge
+  - Analyzing block 0x4004fb - 0x400501
+      0x4004fb: pop RBP, RSP
+              : (6): RSP -> read 
+              : (6): RSP -> write
+              : (7): RBP -> write
+      0x4004fc: mov EDI, 601040
+              : (0): RDI -> write
+      0x400501: jmp RAX
+              : (8): RAX -> read 
+    Block summary:
+      RDI: write
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: write
+      RAX: read 
+    > edges: 1
+    > Getting target of edge
+  - Analyzing block 0x2916 - 0x2916
+    Function summary:
+      RDI: write
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+* Analyzing function register_tm_clones
+- basicblock 0x400510 - 0x400531
+- basicblock 0x400533 - 0x40053b
+- basicblock 0x40053d - 0x400543
+- basicblock 0x400548 - 0x400549
+  - Analyzing block 0x400510 - 0x400531
+      0x400510: mov ESI, 601040
+              : (1): RSI -> write
+      0x400515: push RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> read 
+              : (6): RSP -> write
+      0x400516: sub RSI, 601040
+              : (1): RSI -> read 
+              : (1): RSI -> write
+      0x40051d: mov RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> write
+      0x400520: sar RSI, 3
+              : (1): RSI -> read 
+              : (1): RSI -> write
+      0x400524: mov RAX, RSI
+              : (1): RSI -> read 
+              : (8): RAX -> write
+      0x400527: shr RAX, 3f
+              : (8): RAX -> read 
+              : (8): RAX -> write
+      0x40052b: add RSI, RAX
+              : (8): RAX -> read 
+              : (1): RSI -> read 
+              : (1): RSI -> write
+      0x40052e: sar RSI, 1
+              : (1): RSI -> read 
+              : (1): RSI -> write
+      0x400531: jz 15 + RIP + 2
+    Block summary:
+      RDI: clear
+      RSI: write
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+    > edges: 2
+    > Getting target of edge
+  - Analyzing block 0x400548 - 0x400549
+      0x400548: pop RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> write
+              : (6): RSP -> write
+      0x400549: ret near [RSP]
+      [dereference read-operand]: [RSP]
+setting deref
+              : (6): RSP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: write
+      RAX: clear
+    > edges: 0
+    > Getting target of edge
+  - Analyzing block 0x400533 - 0x40053b
+      0x400533: mov EAX, 0
+              : (8): RAX -> write
+      0x400538: test RAX, RAX
+              : (8): RAX -> read 
+              : (8): RAX -> read 
+      0x40053b: jz b + RIP + 2
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: clear
+      RBP: clear
+      RAX: write
+    > edges: 2
+    > Getting target of edge
+    > next bb is already analyzed
+    > Getting target of edge
+  - Analyzing block 0x40053d - 0x400543
+      0x40053d: pop RBP, RSP
+              : (6): RSP -> read 
+              : (6): RSP -> write
+              : (7): RBP -> write
+      0x40053e: mov EDI, 601040
+              : (0): RDI -> write
+      0x400543: jmp RAX
+              : (8): RAX -> read 
+    Block summary:
+      RDI: write
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: write
+      RAX: read 
+    > edges: 1
+    > Getting target of edge
+  - Analyzing block 0x2917 - 0x2917
+    Function summary:
+      RDI: write
+      RSI: write
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+* Analyzing function __do_global_dtors_aux
+- basicblock 0x400550 - 0x400557
+- basicblock 0x400559 - 0x40055d
+- basicblock 0x400562 - 0x40056a
+- basicblock 0x400570 - 0x400570
+  - Analyzing block 0x400550 - 0x400557
+      0x400550: cmp [RIP + 200ae9], 0
+      [dereference read-operand]: [RIP + 200ae9]
+      0x400557: jnz 17 + RIP + 2
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: clear
+      RBP: clear
+      RAX: clear
+    > edges: 2
+    > Getting target of edge
+  - Analyzing block 0x400570 - 0x400570
+      0x400570: REP ret near [RSP]
+      [dereference read-operand]: [RSP]
+setting deref
+              : (6): RSP -> read 
+              : (3): RCX -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+              : (3): RCX -> write
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: r/w  
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: clear
+      RAX: clear
+    > edges: 0
+    > Getting target of edge
+  - Analyzing block 0x400559 - 0x40055d
+      0x400559: push RBP, RSP
+              : (7): RBP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x40055a: mov RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> write
+      0x40055d: call ffffff7e + RIP + 5
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: clear
+    > edges: 1
+    > Not following direct call edge, looking at fallthrough bb instead
+  - Analyzing block 0x400562 - 0x40056a
+      0x400562: mov [RIP + 200ad7], 1
+      0x400569: pop RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> write
+              : (6): RSP -> write
+      0x40056a: ret near [RSP]
+      [dereference read-operand]: [RSP]
+setting deref
+              : (6): RSP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: write
+      RAX: clear
+    > edges: 0
+    Function summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: r/w  
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: clear
+* Analyzing function frame_dummy
+- basicblock 0x400580 - 0x400585
+  - Analyzing block 0x400580 - 0x400585
+      0x400580: push RBP, RSP
+              : (7): RBP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x400581: mov RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> write
+      0x400584: pop RBP, RSP
+              : (6): RSP -> read 
+              : (6): RSP -> write
+              : (7): RBP -> write
+      0x400585: jmp ffffffffffffff89 + RIP + 2
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: clear
+    > edges: 1
+    > Getting target of edge
+    > next bb is already analyzed
+    Function summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: clear
+* Analyzing function neg
+- basicblock 0x400587 - 0x400594
+  - Analyzing block 0x400587 - 0x400594
+      0x400587: push RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> read 
+              : (6): RSP -> write
+      0x400588: mov RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> write
+      0x40058b: mov [RBP + fffffffffffffffc], EDI
+              : (0): RDI -> read 
+              : (7): RBP -> read 
+      0x40058e: mov EAX, [RBP + fffffffffffffffc]
+      [dereference read-operand]: [RBP + fffffffffffffffc]
+setting deref
+              : (7): RBP -> read 
+              : (8): RAX -> write
+      0x400591: neg EAX
+              : (8): RAX -> read 
+              : (8): RAX -> write
+      0x400593: pop RBP, RSP
+              : (6): RSP -> read 
+              : (6): RSP -> write
+              : (7): RBP -> write
+      0x400594: ret near [RSP]
+      [dereference read-operand]: [RSP]
+setting deref
+              : (6): RSP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: read 
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+    > edges: 0
+    Function summary:
+      RDI: read 
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+* Analyzing function square
+- basicblock 0x400595 - 0x4005a4
+  - Analyzing block 0x400595 - 0x4005a4
+      0x400595: push RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> read 
+              : (6): RSP -> write
+      0x400596: mov RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> write
+      0x400599: mov [RBP + fffffffffffffffc], EDI
+              : (0): RDI -> read 
+              : (7): RBP -> read 
+      0x40059c: mov EAX, [RBP + fffffffffffffffc]
+      [dereference read-operand]: [RBP + fffffffffffffffc]
+setting deref
+              : (7): RBP -> read 
+              : (8): RAX -> write
+      0x40059f: imul EAX, [RBP + fffffffffffffffc]
+      [dereference read-operand]: [RBP + fffffffffffffffc]
+setting deref
+              : (8): RAX -> read 
+              : (7): RBP -> read 
+              : (8): RAX -> write
+      0x4005a3: pop RBP, RSP
+              : (6): RSP -> read 
+              : (6): RSP -> write
+              : (7): RBP -> write
+      0x4005a4: ret near [RSP]
+      [dereference read-operand]: [RSP]
+setting deref
+              : (6): RSP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: read 
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+    > edges: 0
+    Function summary:
+      RDI: read 
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+* Analyzing function add
+- basicblock 0x4005a5 - 0x4005b8
+  - Analyzing block 0x4005a5 - 0x4005b8
+      0x4005a5: push RBP, RSP
+              : (7): RBP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x4005a6: mov RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> write
+      0x4005a9: mov [RBP + fffffffffffffffc], EDI
+              : (0): RDI -> read 
+              : (7): RBP -> read 
+      0x4005ac: mov [RBP + fffffffffffffff8], ESI
+              : (1): RSI -> read 
+              : (7): RBP -> read 
+      0x4005af: mov EDX, [RBP + fffffffffffffffc]
+      [dereference read-operand]: [RBP + fffffffffffffffc]
+setting deref
+              : (7): RBP -> read 
+              : (2): RDX -> write
+      0x4005b2: mov EAX, [RBP + fffffffffffffff8]
+      [dereference read-operand]: [RBP + fffffffffffffff8]
+setting deref
+              : (7): RBP -> read 
+              : (8): RAX -> write
+      0x4005b5: add EAX, EDX
+              : (2): RDX -> read 
+              : (8): RAX -> read 
+              : (8): RAX -> write
+      0x4005b7: pop RBP, RSP
+              : (6): RSP -> read 
+              : (6): RSP -> write
+              : (7): RBP -> write
+      0x4005b8: ret near [RSP]
+      [dereference read-operand]: [RSP]
+setting deref
+              : (6): RSP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: read 
+      RSI: read 
+      RDX: write
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+    > edges: 1
+    > Not following return edge
+    Function summary:
+      RDI: read 
+      RSI: read 
+      RDX: write
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+* Analyzing function mul
+- basicblock 0x4005b9 - 0x4005cb
+  - Analyzing block 0x4005b9 - 0x4005cb
+      0x4005b9: push RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> read 
+              : (6): RSP -> write
+      0x4005ba: mov RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> write
+      0x4005bd: mov [RBP + fffffffffffffffc], EDI
+              : (0): RDI -> read 
+              : (7): RBP -> read 
+      0x4005c0: mov [RBP + fffffffffffffff8], ESI
+              : (1): RSI -> read 
+              : (7): RBP -> read 
+      0x4005c3: mov EAX, [RBP + fffffffffffffffc]
+      [dereference read-operand]: [RBP + fffffffffffffffc]
+setting deref
+              : (7): RBP -> read 
+              : (8): RAX -> write
+      0x4005c6: imul EAX, [RBP + fffffffffffffff8]
+      [dereference read-operand]: [RBP + fffffffffffffff8]
+setting deref
+              : (8): RAX -> read 
+              : (7): RBP -> read 
+              : (8): RAX -> write
+      0x4005ca: pop RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> write
+              : (6): RSP -> write
+      0x4005cb: ret near [RSP]
+      [dereference read-operand]: [RSP]
+setting deref
+              : (6): RSP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: read 
+      RSI: read 
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+    > edges: 0
+    Function summary:
+      RDI: read 
+      RSI: read 
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+* Analyzing function fma3
+- basicblock 0x4005cc - 0x4005e8
+  - Analyzing block 0x4005cc - 0x4005e8
+      0x4005cc: push RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> read 
+              : (6): RSP -> write
+      0x4005cd: mov RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> write
+      0x4005d0: mov [RBP + fffffffffffffffc], EDI
+              : (0): RDI -> read 
+              : (7): RBP -> read 
+      0x4005d3: mov [RBP + fffffffffffffff8], ESI
+              : (1): RSI -> read 
+              : (7): RBP -> read 
+      0x4005d6: mov [RBP + fffffffffffffff4], EDX
+              : (7): RBP -> read 
+              : (2): RDX -> read 
+      0x4005d9: mov EAX, [RBP + fffffffffffffffc]
+      [dereference read-operand]: [RBP + fffffffffffffffc]
+setting deref
+              : (7): RBP -> read 
+              : (8): RAX -> write
+      0x4005dc: imul EAX, [RBP + fffffffffffffff8]
+      [dereference read-operand]: [RBP + fffffffffffffff8]
+setting deref
+              : (8): RAX -> read 
+              : (7): RBP -> read 
+              : (8): RAX -> write
+      0x4005e0: mov EDX, EAX
+              : (8): RAX -> read 
+              : (2): RDX -> write
+      0x4005e2: mov EAX, [RBP + fffffffffffffff4]
+      [dereference read-operand]: [RBP + fffffffffffffff4]
+setting deref
+              : (7): RBP -> read 
+              : (8): RAX -> write
+      0x4005e5: add EAX, EDX
+              : (8): RAX -> read 
+              : (2): RDX -> read 
+              : (8): RAX -> write
+      0x4005e7: pop RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> write
+              : (6): RSP -> write
+      0x4005e8: ret near [RSP]
+      [dereference read-operand]: [RSP]
+setting deref
+              : (6): RSP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: read 
+      RSI: read 
+      RDX: read 
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+    > edges: 0
+    Function summary:
+      RDI: read 
+      RSI: read 
+      RDX: read 
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+* Analyzing function apply1
+- basicblock 0x4005e9 - 0x400601
+- basicblock 0x400603 - 0x400604
+  - Analyzing block 0x4005e9 - 0x400601
+      0x4005e9: push RBP, RSP
+              : (7): RBP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x4005ea: mov RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> write
+      0x4005ed: sub RSP, 10
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x4005f1: mov [RBP + fffffffffffffff8], RDI
+              : (7): RBP -> read 
+              : (0): RDI -> read 
+      0x4005f5: mov [RBP + fffffffffffffff4], ESI
+              : (7): RBP -> read 
+              : (1): RSI -> read 
+      0x4005f8: mov EDX, [RBP + fffffffffffffff4]
+      [dereference read-operand]: [RBP + fffffffffffffff4]
+setting deref
+              : (7): RBP -> read 
+              : (2): RDX -> write
+      0x4005fb: mov RAX, [RBP + fffffffffffffff8]
+      [dereference read-operand]: [RBP + fffffffffffffff8]
+setting deref
+              : (7): RBP -> read 
+              : (8): RAX -> write
+      0x4005ff: mov EDI, EDX
+              : (2): RDX -> read 
+              : (0): RDI -> write
+      0x400601: call RAX
+              : (6): RSP -> read 
+              : (8): RAX -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: read 
+      RSI: read 
+      RDX: write
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+    > edges: 1
+    > Not following indirect call edge, looking at fallthrough bb instead
+  - Analyzing block 0x400603 - 0x400604
+      0x400603: leave 
+              : (7): RBP -> read 
+              : (6): RSP -> write
+              : (7): RBP -> write
+      0x400604: ret near [RSP]
+      [dereference read-operand]: [RSP]
+setting deref
+              : (6): RSP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: write
+      RBP: r/w  
+      RAX: clear
+    > edges: 1
+    > Not following return edge
+    Function summary:
+      RDI: read 
+      RSI: read 
+      RDX: write
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+* Analyzing function apply2
+- basicblock 0x400605 - 0x400625
+- basicblock 0x400627 - 0x400628
+  - Analyzing block 0x400605 - 0x400625
+      0x400605: push RBP, RSP
+              : (7): RBP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x400606: mov RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> write
+      0x400609: sub RSP, 10
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x40060d: mov [RBP + fffffffffffffff8], RDI
+              : (0): RDI -> read 
+              : (7): RBP -> read 
+      0x400611: mov [RBP + fffffffffffffff4], ESI
+              : (7): RBP -> read 
+              : (1): RSI -> read 
+      0x400614: mov [RBP + fffffffffffffff0], EDX
+              : (2): RDX -> read 
+              : (7): RBP -> read 
+      0x400617: mov ECX, [RBP + fffffffffffffff0]
+      [dereference read-operand]: [RBP + fffffffffffffff0]
+setting deref
+              : (7): RBP -> read 
+              : (3): RCX -> write
+      0x40061a: mov EDX, [RBP + fffffffffffffff4]
+      [dereference read-operand]: [RBP + fffffffffffffff4]
+setting deref
+              : (7): RBP -> read 
+              : (2): RDX -> write
+      0x40061d: mov RAX, [RBP + fffffffffffffff8]
+      [dereference read-operand]: [RBP + fffffffffffffff8]
+setting deref
+              : (7): RBP -> read 
+              : (8): RAX -> write
+      0x400621: mov ESI, ECX
+              : (3): RCX -> read 
+              : (1): RSI -> write
+      0x400623: mov EDI, EDX
+              : (2): RDX -> read 
+              : (0): RDI -> write
+      0x400625: call RAX
+              : (6): RSP -> read 
+              : (8): RAX -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: read 
+      RSI: read 
+      RDX: read 
+      RCX: write
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+    > edges: 1
+    > Not following indirect call edge, looking at fallthrough bb instead
+  - Analyzing block 0x400627 - 0x400628
+      0x400627: leave 
+              : (7): RBP -> read 
+              : (6): RSP -> write
+              : (7): RBP -> write
+      0x400628: ret near [RSP]
+      [dereference read-operand]: [RSP]
+setting deref
+              : (6): RSP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: write
+      RBP: r/w  
+      RAX: clear
+    > edges: 1
+    > Not following return edge
+    Function summary:
+      RDI: read 
+      RSI: read 
+      RDX: read 
+      RCX: write
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+* Analyzing function apply3
+- basicblock 0x400629 - 0x40064d
+- basicblock 0x40064f - 0x400650
+  - Analyzing block 0x400629 - 0x40064d
+      0x400629: push RBP, RSP
+              : (7): RBP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x40062a: mov RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> write
+      0x40062d: sub RSP, 20
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x400631: mov [RBP + fffffffffffffff8], RDI
+              : (7): RBP -> read 
+              : (0): RDI -> read 
+      0x400635: mov [RBP + fffffffffffffff4], ESI
+              : (7): RBP -> read 
+              : (1): RSI -> read 
+      0x400638: mov [RBP + fffffffffffffff0], EDX
+              : (7): RBP -> read 
+              : (2): RDX -> read 
+      0x40063b: mov [RBP + ffffffffffffffec], ECX
+              : (3): RCX -> read 
+              : (7): RBP -> read 
+      0x40063e: mov EDX, [RBP + ffffffffffffffec]
+      [dereference read-operand]: [RBP + ffffffffffffffec]
+setting deref
+              : (7): RBP -> read 
+              : (2): RDX -> write
+      0x400641: mov ESI, [RBP + fffffffffffffff0]
+      [dereference read-operand]: [RBP + fffffffffffffff0]
+setting deref
+              : (7): RBP -> read 
+              : (1): RSI -> write
+      0x400644: mov ECX, [RBP + fffffffffffffff4]
+      [dereference read-operand]: [RBP + fffffffffffffff4]
+setting deref
+              : (7): RBP -> read 
+              : (3): RCX -> write
+      0x400647: mov RAX, [RBP + fffffffffffffff8]
+      [dereference read-operand]: [RBP + fffffffffffffff8]
+setting deref
+              : (7): RBP -> read 
+              : (8): RAX -> write
+      0x40064b: mov EDI, ECX
+              : (3): RCX -> read 
+              : (0): RDI -> write
+      0x40064d: call RAX
+              : (6): RSP -> read 
+              : (8): RAX -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: read 
+      RSI: read 
+      RDX: read 
+      RCX: read 
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+    > edges: 1
+    > Not following indirect call edge, looking at fallthrough bb instead
+  - Analyzing block 0x40064f - 0x400650
+      0x40064f: leave 
+              : (7): RBP -> read 
+              : (6): RSP -> write
+              : (7): RBP -> write
+      0x400650: ret near [RSP]
+      [dereference read-operand]: [RSP]
+setting deref
+              : (6): RSP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: write
+      RBP: r/w  
+      RAX: clear
+    > edges: 1
+    > Not following return edge
+    Function summary:
+      RDI: read 
+      RSI: read 
+      RDX: read 
+      RCX: read 
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+* Analyzing function main
+- basicblock 0x400651 - 0x400667
+- basicblock 0x400669 - 0x400673
+- basicblock 0x400678 - 0x40067b
+- basicblock 0x40067f - 0x400683
+- basicblock 0x400685 - 0x400694
+- basicblock 0x400699 - 0x4006b0
+- basicblock 0x4006b5 - 0x4006cf
+- basicblock 0x4006d4 - 0x4006e5
+- basicblock 0x4006ea - 0x4006f3
+- basicblock 0x4006f5 - 0x40070b
+- basicblock 0x400710 - 0x400717
+- basicblock 0x40071c - 0x400722
+  - Analyzing block 0x400651 - 0x400667
+      0x400651: push RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> read 
+              : (6): RSP -> write
+      0x400652: mov RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> write
+      0x400655: sub RSP, 10
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x400659: mov [RBP + fffffffffffffff0], 1
+              : (7): RBP -> read 
+      0x400660: mov [RBP + fffffffffffffff4], 1
+              : (7): RBP -> read 
+      0x400667: jmp 16 + RIP + 2
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: clear
+    > edges: 1
+    > Getting target of edge
+  - Analyzing block 0x40067f - 0x400683
+      0x40067f: cmp [RBP + fffffffffffffff4], 3
+      [dereference read-operand]: [RBP + fffffffffffffff4]
+setting deref
+              : (7): RBP -> read 
+      0x400683: jle ffffffffffffffe4 + RIP + 2
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: clear
+      RBP: read 
+      RAX: clear
+    > edges: 2
+    > Getting target of edge
+  - Analyzing block 0x400669 - 0x400673
+      0x400669: mov EDX, [RBP + fffffffffffffff4]
+      [dereference read-operand]: [RBP + fffffffffffffff4]
+setting deref
+              : (7): RBP -> read 
+              : (2): RDX -> write
+      0x40066c: mov EAX, [RBP + fffffffffffffff0]
+      [dereference read-operand]: [RBP + fffffffffffffff0]
+setting deref
+              : (7): RBP -> read 
+              : (8): RAX -> write
+      0x40066f: mov ESI, EDX
+              : (2): RDX -> read 
+              : (1): RSI -> write
+      0x400671: mov EDI, EAX
+              : (8): RAX -> read 
+              : (0): RDI -> write
+      0x400673: call ffffff2d + RIP + 5
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: write
+      RSI: write
+      RDX: write
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+    > edges: 1
+    > Not following direct call edge, looking at fallthrough bb instead
+  - Analyzing block 0x400678 - 0x40067b
+      0x400678: mov [RBP + fffffffffffffff0], EAX
+              : (8): RAX -> read 
+              : (7): RBP -> read 
+      0x40067b: add [RBP + fffffffffffffff4], 1
+      [dereference read-operand]: [RBP + fffffffffffffff4]
+setting deref
+              : (7): RBP -> read 
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: clear
+      RBP: read 
+      RAX: read 
+    > edges: 1
+    > Getting target of edge
+    > next bb is already analyzed
+    > Getting target of edge
+  - Analyzing block 0x400685 - 0x400694
+      0x400685: lea RAX, RIP + ffffff09
+              : (8): RAX -> write
+      0x40068c: mov EDX, [RBP + fffffffffffffff0]
+      [dereference read-operand]: [RBP + fffffffffffffff0]
+setting deref
+              : (7): RBP -> read 
+              : (2): RDX -> write
+      0x40068f: mov ESI, EDX
+              : (2): RDX -> read 
+              : (1): RSI -> write
+      0x400691: mov RDI, RAX
+              : (8): RAX -> read 
+              : (0): RDI -> write
+      0x400694: call ffffff50 + RIP + 5
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: write
+      RSI: write
+      RDX: write
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+    > edges: 1
+    > Not following direct call edge, looking at fallthrough bb instead
+  - Analyzing block 0x400699 - 0x4006b0
+      0x400699: mov [RBP + fffffffffffffff0], EAX
+              : (8): RAX -> read 
+              : (7): RBP -> read 
+      0x40069c: lea RAX, RIP + ffffff16
+              : (8): RAX -> write
+      0x4006a3: mov ECX, [RBP + fffffffffffffff0]
+      [dereference read-operand]: [RBP + fffffffffffffff0]
+setting deref
+              : (7): RBP -> read 
+              : (3): RCX -> write
+      0x4006a6: mov EDX, 3
+              : (2): RDX -> write
+      0x4006ab: mov ESI, ECX
+              : (3): RCX -> read 
+              : (1): RSI -> write
+      0x4006ad: mov RDI, RAX
+              : (8): RAX -> read 
+              : (0): RDI -> write
+      0x4006b0: call ffffff50 + RIP + 5
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: write
+      RSI: write
+      RDX: write
+      RCX: write
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: read 
+    > edges: 1
+    > Not following direct call edge, looking at fallthrough bb instead
+  - Analyzing block 0x4006b5 - 0x4006cf
+      0x4006b5: mov [RBP + fffffffffffffff0], EAX
+              : (7): RBP -> read 
+              : (8): RAX -> read 
+      0x4006b8: lea RAX, RIP + ffffff0d
+              : (8): RAX -> write
+      0x4006bf: mov ESI, [RBP + fffffffffffffff0]
+      [dereference read-operand]: [RBP + fffffffffffffff0]
+setting deref
+              : (7): RBP -> read 
+              : (1): RSI -> write
+      0x4006c2: mov ECX, 5
+              : (3): RCX -> write
+      0x4006c7: mov EDX, 2
+              : (2): RDX -> write
+      0x4006cc: mov RDI, RAX
+              : (8): RAX -> read 
+              : (0): RDI -> write
+      0x4006cf: call ffffff55 + RIP + 5
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: write
+      RSI: write
+      RDX: write
+      RCX: write
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: read 
+    > edges: 1
+    > Not following direct call edge, looking at fallthrough bb instead
+  - Analyzing block 0x4006d4 - 0x4006e5
+      0x4006d4: mov [RBP + fffffffffffffff0], EAX
+              : (8): RAX -> read 
+              : (7): RBP -> read 
+      0x4006d7: lea RSI, RIP + d6
+              : (1): RSI -> write
+      0x4006de: lea RDI, RIP + d1
+              : (0): RDI -> write
+      0x4006e5: call fffffda6 + RIP + 5
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: write
+      RSI: write
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: read 
+    > edges: 1
+    > Not following direct call edge, looking at fallthrough bb instead
+  - Analyzing block 0x4006ea - 0x4006f3
+      0x4006ea: mov [RBP + fffffffffffffff8], RAX
+              : (8): RAX -> read 
+              : (7): RBP -> read 
+      0x4006ee: cmp [RBP + fffffffffffffff8], 0
+      [dereference read-operand]: [RBP + fffffffffffffff8]
+setting deref
+              : (7): RBP -> read 
+      0x4006f3: jz 27 + RIP + 2
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: clear
+      RBP: read 
+      RAX: read 
+    > edges: 2
+    > Getting target of edge
+  - Analyzing block 0x40071c - 0x400722
+      0x40071c: mov EAX, 0
+              : (8): RAX -> write
+      0x400721: leave 
+              : (7): RBP -> read 
+              : (6): RSP -> write
+              : (7): RBP -> write
+      0x400722: ret near [RSP]
+      [dereference read-operand]: [RSP]
+setting deref
+              : (6): RSP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: write
+      RBP: r/w  
+      RAX: write
+    > edges: 0
+    > Getting target of edge
+  - Analyzing block 0x4006f5 - 0x40070b
+      0x4006f5: mov EDX, [RBP + fffffffffffffff0]
+      [dereference read-operand]: [RBP + fffffffffffffff0]
+setting deref
+              : (7): RBP -> read 
+              : (2): RDX -> write
+      0x4006f8: mov RAX, [RBP + fffffffffffffff8]
+      [dereference read-operand]: [RBP + fffffffffffffff8]
+setting deref
+              : (7): RBP -> read 
+              : (8): RAX -> write
+      0x4006fc: lea RSI, RIP + bc
+              : (1): RSI -> write
+      0x400703: mov RDI, RAX
+              : (8): RAX -> read 
+              : (0): RDI -> write
+      0x400706: mov EAX, 0
+              : (8): RAX -> write
+      0x40070b: call fffffd70 + RIP + 5
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: write
+      RSI: write
+      RDX: write
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+    > edges: 1
+    > Not following direct call edge, looking at fallthrough bb instead
+  - Analyzing block 0x400710 - 0x400717
+      0x400710: mov RAX, [RBP + fffffffffffffff8]
+      [dereference read-operand]: [RBP + fffffffffffffff8]
+setting deref
+              : (7): RBP -> read 
+              : (8): RAX -> write
+      0x400714: mov RDI, RAX
+              : (8): RAX -> read 
+              : (0): RDI -> write
+      0x400717: call fffffd54 + RIP + 5
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: write
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+    > edges: 1
+    > Not following direct call edge, looking at fallthrough bb instead
+    > next bb is already analyzed
+    Function summary:
+      RDI: write
+      RSI: write
+      RDX: write
+      RCX: write
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: write
+* Analyzing function __libc_csu_init
+- basicblock 0x400730 - 0x40075c
+- basicblock 0x400761 - 0x400764
+- basicblock 0x400766 - 0x400768
+- basicblock 0x400770 - 0x400779
+- basicblock 0x40077d - 0x400784
+- basicblock 0x400786 - 0x400794
+  - Analyzing block 0x400730 - 0x40075c
+      0x400730: push R15, RSP
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x400732: push R14, RSP
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x400734: mov R15, RDX
+              : (2): RDX -> read 
+      0x400737: push R13, RSP
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x400739: push R12, RSP
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x40073b: lea R12, RIP + 20069e
+      0x400742: push RBP, RSP
+              : (6): RSP -> read 
+              : (7): RBP -> read 
+              : (6): RSP -> write
+      0x400743: lea RBP, RIP + 20069e
+              : (7): RBP -> write
+      0x40074a: push RBX, RSP
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x40074b: mov R13D, EDI
+              : (0): RDI -> read 
+      0x40074e: mov R14, RSI
+              : (1): RSI -> read 
+      0x400751: sub RBP, R12
+              : (7): RBP -> read 
+              : (7): RBP -> write
+      0x400754: sub RSP, 8
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x400758: sar RBP, 3
+              : (7): RBP -> read 
+              : (7): RBP -> write
+      0x40075c: call fffffcdf + RIP + 5
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: read 
+      RSI: read 
+      RDX: read 
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: clear
+    > edges: 1
+    > Not following direct call edge, looking at fallthrough bb instead
+  - Analyzing block 0x400761 - 0x400764
+      0x400761: test RBP, RBP
+              : (7): RBP -> read 
+              : (7): RBP -> read 
+      0x400764: jz 20 + RIP + 2
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: clear
+      RBP: read 
+      RAX: clear
+    > edges: 2
+    > Getting target of edge
+  - Analyzing block 0x400786 - 0x400794
+      0x400786: add RSP, 8
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x40078a: pop RBX, RSP
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x40078b: pop RBP, RSP
+              : (6): RSP -> read 
+              : (6): RSP -> write
+              : (7): RBP -> write
+      0x40078c: pop R12, RSP
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x40078e: pop R13, RSP
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x400790: pop R14, RSP
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x400792: pop R15, RSP
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x400794: ret near [RSP]
+      [dereference read-operand]: [RSP]
+setting deref
+              : (6): RSP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: write
+      RAX: clear
+    > edges: 0
+    > Getting target of edge
+  - Analyzing block 0x400766 - 0x400768
+      0x400766: xor EBX, EBX
+      0x400768: nop [RAX + RAX * 1 + 0]
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: clear
+      RBP: clear
+      RAX: clear
+    > edges: 1
+    > Getting target of edge
+  - Analyzing block 0x400770 - 0x400779
+      0x400770: mov RDX, R15
+              : (2): RDX -> write
+      0x400773: mov RSI, R14
+              : (1): RSI -> write
+      0x400776: mov EDI, R13D
+              : (0): RDI -> write
+      0x400779: call [R12 + RBX * 8]
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: write
+      RSI: write
+      RDX: write
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: clear
+      RAX: clear
+    > edges: 1
+    > Not following indirect call edge, looking at fallthrough bb instead
+  - Analyzing block 0x40077d - 0x400784
+      0x40077d: add RBX, 1
+      0x400781: cmp RBP, RBX
+              : (7): RBP -> read 
+      0x400784: jnz ffffffffffffffea + RIP + 2
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: clear
+      RBP: read 
+      RAX: clear
+    > edges: 2
+    > Getting target of edge
+    > next bb is already analyzed
+    > Getting target of edge
+    > next bb is already analyzed
+    Function summary:
+      RDI: read 
+      RSI: read 
+      RDX: read 
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: read 
+      RAX: clear
+* Analyzing function __libc_csu_fini
+- basicblock 0x4007a0 - 0x4007a0
+  - Analyzing block 0x4007a0 - 0x4007a0
+      0x4007a0: REP ret near [RSP]
+      [dereference read-operand]: [RSP]
+setting deref
+              : (6): RSP -> read 
+              : (3): RCX -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+              : (3): RCX -> write
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: r/w  
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: clear
+      RAX: clear
+    > edges: 0
+    Function summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: r/w  
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: clear
+      RAX: clear
+* Analyzing function _fini
+- basicblock 0x4007a4 - 0x4007ac
+  - Analyzing block 0x4007a4 - 0x4007ac
+      0x4007a4: sub RSP, 8
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x4007a8: add RSP, 8
+              : (6): RSP -> read 
+              : (6): RSP -> write
+      0x4007ac: ret near [RSP]
+      [dereference read-operand]: [RSP]
+setting deref
+              : (6): RSP -> read 
+              : (6): RSP -> read 
+              : (6): RSP -> write
+    Block summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: clear
+      RAX: clear
+    > edges: 0
+    Function summary:
+      RDI: clear
+      RSI: clear
+      RDX: clear
+      RCX: clear
+      R8 : clear
+      R9 : clear
+      RSP: r/w  
+      RBP: clear
+      RAX: clear
+
+=== Starting retuse analysis for function _init ===
+-> number of exit blocks: 1
+[ret-bt]  RAX is written in block
+=== Finished retuse analysis for function _init: 1 ===
+
+
+=== Starting conclusive analysis for function _init ===
+[ft] 0x400440 ? (block has 0)
+[ft]  0x400440 <- 0x400450 ? (block has 0)
+[ft]   0x400440 <- 0x400450 <- 0x400452 ? (block has 0)
+[ft]   0x400440 <- 0x400450 <- 0x400452 <- (0)
+[ft]  blck_bitmap = C C C C C C  (block 0x400450)
+[ft]       bitmap = C C C C C C 
+[ft]  comb_bitmap = C C C C C C 
+[ft]  updt_bitmap = C C C C C C 
+[ft]  0x400440 <- 0x400450 <- (0)
+[ft] blck_bitmap = C C C C C C  (block 0x400440)
+[ft]      bitmap = C C C C C C 
+[ft]      bitmap = C C C C C C 
+[ft] comb_bitmap = C C C C C C 
+[ft] updt_bitmap = C C C C C C 
+[ft] 0x400440 <- (0)
+=== Finished recursive analysis for function _init: 0 ===
+
+
+=== Starting retuse analysis for function _start ===
+-> number of exit blocks: 0
+=== Finished retuse analysis for function _start: 1 ===
+
+
+=== Starting conclusive analysis for function _start ===
+[ft] 0x4004a0 ? (block has a9a)
+[ft] 0x4004a0 <- (a9a)
+=== Finished recursive analysis for function _start: 3 ===
+
+
+=== Starting retuse analysis for function _dl_relocate_static_pie ===
+-> number of exit blocks: 1
+=== Finished retuse analysis for function _dl_relocate_static_pie: 0 ===
+
+
+=== Starting conclusive analysis for function _dl_relocate_static_pie ===
+[ft] 0x4004d0 ? (block has c0)
+[ft] 0x4004d0 <- (c0)
+=== Finished recursive analysis for function _dl_relocate_static_pie: 0 ===
+
+
+=== Starting retuse analysis for function deregister_tm_clones ===
+-> number of exit blocks: 1
+[ret-bt]  RAX is written in block
+=== Finished retuse analysis for function deregister_tm_clones: 1 ===
+
+
+=== Starting conclusive analysis for function deregister_tm_clones ===
+[ft] 0x4004e0 ? (block has 0)
+[ft]  0x4004e0 <- 0x400508 ? (block has 0)
+[ft]  0x4004e0 <- 0x400508 <- (0)
+[ft]  0x4004e0 <- 0x4004f1 ? (block has 0)
+[ft]   0x4004e0 <- 0x4004f1 <- 0x4004fb ? (block has 2)
+[ft]    0x4004e0 <- 0x4004f1 <- 0x4004fb <- 0x2916 ? (block has 0)
+[ft]    0x4004e0 <- 0x4004f1 <- 0x4004fb <- 0x2916 <- (0)
+[ft]   blck_bitmap = W C C C C C  (block 0x4004fb)
+[ft]        bitmap = C C C C C C 
+[ft]   comb_bitmap = C C C C C C 
+[ft]   updt_bitmap = W C C C C C 
+[ft]   0x4004e0 <- 0x4004f1 <- 0x4004fb <- (2)
+[ft]  blck_bitmap = C C C C C C  (block 0x4004f1)
+[ft]       bitmap = C C C C C C 
+[ft]       bitmap = W C C C C C 
+[ft]  comb_bitmap = W C C C C C 
+[ft]  updt_bitmap = W C C C C C 
+[ft]  0x4004e0 <- 0x4004f1 <- (2)
+[ft] blck_bitmap = C C C C C C  (block 0x4004e0)
+[ft]      bitmap = C C C C C C 
+[ft]      bitmap = W C C C C C 
+[ft] comb_bitmap = W C C C C C 
+[ft] updt_bitmap = W C C C C C 
+[ft] 0x4004e0 <- (2)
+=== Finished recursive analysis for function deregister_tm_clones: 0 ===
+
+
+=== Starting retuse analysis for function register_tm_clones ===
+-> number of exit blocks: 1
+[ret-bt]  RAX is written in block
+=== Finished retuse analysis for function register_tm_clones: 1 ===
+
+
+=== Starting conclusive analysis for function register_tm_clones ===
+[ft] 0x400510 ? (block has 8)
+[ft]  0x400510 <- 0x400548 ? (block has 0)
+[ft]  0x400510 <- 0x400548 <- (0)
+[ft]  0x400510 <- 0x400533 ? (block has 0)
+[ft]   0x400510 <- 0x400533 <- 0x40053d ? (block has 2)
+[ft]    0x400510 <- 0x400533 <- 0x40053d <- 0x2917 ? (block has 0)
+[ft]    0x400510 <- 0x400533 <- 0x40053d <- 0x2917 <- (0)
+[ft]   blck_bitmap = W C C C C C  (block 0x40053d)
+[ft]        bitmap = C C C C C C 
+[ft]   comb_bitmap = C C C C C C 
+[ft]   updt_bitmap = W C C C C C 
+[ft]   0x400510 <- 0x400533 <- 0x40053d <- (2)
+[ft]  blck_bitmap = C C C C C C  (block 0x400533)
+[ft]       bitmap = C C C C C C 
+[ft]       bitmap = W C C C C C 
+[ft]  comb_bitmap = W C C C C C 
+[ft]  updt_bitmap = W C C C C C 
+[ft]  0x400510 <- 0x400533 <- (2)
+[ft] blck_bitmap = C W C C C C  (block 0x400510)
+[ft]      bitmap = C C C C C C 
+[ft]      bitmap = W C C C C C 
+[ft] comb_bitmap = W C C C C C 
+[ft] updt_bitmap = W W C C C C 
+[ft] 0x400510 <- (a)
+=== Finished recursive analysis for function register_tm_clones: 0 ===
+
+
+=== Starting retuse analysis for function __do_global_dtors_aux ===
+-> number of exit blocks: 2
+=== Finished retuse analysis for function __do_global_dtors_aux: 0 ===
+
+
+=== Starting conclusive analysis for function __do_global_dtors_aux ===
+[ft] 0x400550 ? (block has 0)
+[ft]  0x400550 <- 0x400570 ? (block has c0)
+[ft]  0x400550 <- 0x400570 <- (c0)
+[ft]  0x400550 <- 0x400559 ? (block has 0)
+[ft]   0x400550 <- 0x400559 <- 0x4004e0 ? (block has 0)
+[ft]   blck_bitmap = C C C C C C  (block 0x4004e0)
+[ft]        bitmap = C C C C C C 
+[ft]        bitmap = W C C C C C 
+[ft]   comb_bitmap = W C C C C C 
+[ft]   updt_bitmap = W C C C C C 
+[ft]   0x400550 <- 0x400559 <- 0x4004e0 <- (2)
+[ft]  blck_bitmap = C C C C C C  (block 0x400559)
+[ft]       bitmap = W C C C C C 
+[ft]  comb_bitmap = W C C C C C 
+[ft]  updt_bitmap = W C C C C C 
+[ft]  0x400550 <- 0x400559 <- (2)
+[ft] blck_bitmap = C C C C C C  (block 0x400550)
+[ft]      bitmap = C C C X C C 
+[ft]      bitmap = W C C C C C 
+[ft] comb_bitmap = W C C C C C 
+[ft] updt_bitmap = W C C C C C 
+[ft] 0x400550 <- (2)
+=== Finished recursive analysis for function __do_global_dtors_aux: 0 ===
+
+
+=== Starting retuse analysis for function frame_dummy ===
+-> number of exit blocks: 0
+=== Finished retuse analysis for function frame_dummy: 1 ===
+
+
+=== Starting conclusive analysis for function frame_dummy ===
+[ft] 0x400580 ? (block has 0)
+[ft]  0x400580 <- 0x400510 ? (block has 8)
+[ft]  blck_bitmap = C W C C C C  (block 0x400510)
+[ft]       bitmap = C C C C C C 
+[ft]       bitmap = W C C C C C 
+[ft]  comb_bitmap = W C C C C C 
+[ft]  updt_bitmap = W W C C C C 
+[ft]  0x400580 <- 0x400510 <- (a)
+[ft] blck_bitmap = C C C C C C  (block 0x400580)
+[ft]      bitmap = W W C C C C 
+[ft] comb_bitmap = W W C C C C 
+[ft] updt_bitmap = W W C C C C 
+[ft] 0x400580 <- (a)
+=== Finished recursive analysis for function frame_dummy: 0 ===
+
+
+=== Starting retuse analysis for function neg ===
+-> number of exit blocks: 1
+[ret-bt] RAX is written in block
+=== Finished retuse analysis for function neg: 1 ===
+
+
+=== Starting conclusive analysis for function neg ===
+[ft] 0x400587 ? (block has 1)
+[ft] 0x400587 <- (1)
+=== Finished recursive analysis for function neg: 1 ===
+
+
+=== Starting retuse analysis for function square ===
+-> number of exit blocks: 1
+[ret-bt] RAX is written in block
+=== Finished retuse analysis for function square: 1 ===
+
+
+=== Starting conclusive analysis for function square ===
+[ft] 0x400595 ? (block has 1)
+[ft] 0x400595 <- (1)
+=== Finished recursive analysis for function square: 1 ===
+
+
+=== Starting retuse analysis for function add ===
+-> number of exit blocks: 1
+[ret-bt] RAX is written in block
+=== Finished retuse analysis for function add: 1 ===
+
+
+=== Starting conclusive analysis for function add ===
+[ft] 0x4005a5 ? (block has 25)
+[ft] 0x4005a5 <- (25)
+=== Finished recursive analysis for function add: 2 ===
+
+
+=== Starting retuse analysis for function mul ===
+-> number of exit blocks: 1
+[ret-bt] RAX is written in block
+=== Finished retuse analysis for function mul: 1 ===
+
+
+=== Starting conclusive analysis for function mul ===
+[ft] 0x4005b9 ? (block has 5)
+[ft] 0x4005b9 <- (5)
+=== Finished recursive analysis for function mul: 2 ===
+
+
+=== Starting retuse analysis for function fma3 ===
+-> number of exit blocks: 1
+[ret-bt] RAX is written in block
+=== Finished retuse analysis for function fma3: 1 ===
+
+
+=== Starting conclusive analysis for function fma3 ===
+[ft] 0x4005cc ? (block has 15)
+[ft] 0x4005cc <- (15)
+=== Finished recursive analysis for function fma3: 3 ===
+
+
+=== Starting retuse analysis for function apply1 ===
+-> number of exit blocks: 1
+[ret-bt] fount fallup
+[ret-bt] outgoing edge of up is indirect call=== Finished retuse analysis for function apply1: 1 ===
+
+
+=== Starting conclusive analysis for function apply1 ===
+[ft] 0x4005e9 ? (block has 25)
+[ft]  0x4005e9 <- 0x400603 ? (block has 0)
+[ft]  0x4005e9 <- 0x400603 <- (0)
+[ft] blck_bitmap = R R W C C C  (block 0x4005e9)
+[ft]      bitmap = C C C C C C 
+[ft] comb_bitmap = C C C C C C 
+[ft] updt_bitmap = R R W C C C 
+[ft] 0x4005e9 <- (25)
+=== Finished recursive analysis for function apply1: 2 ===
+
+
+=== Starting retuse analysis for function apply2 ===
+-> number of exit blocks: 1
+[ret-bt] fount fallup
+[ret-bt] outgoing edge of up is indirect call=== Finished retuse analysis for function apply2: 1 ===
+
+
+=== Starting conclusive analysis for function apply2 ===
+[ft] 0x400605 ? (block has 95)
+[ft]  0x400605 <- 0x400627 ? (block has 0)
+[ft]  0x400605 <- 0x400627 <- (0)
+[ft] blck_bitmap = R R R W C C  (block 0x400605)
+[ft]      bitmap = C C C C C C 
+[ft] comb_bitmap = C C C C C C 
+[ft] updt_bitmap = R R R W C C 
+[ft] 0x400605 <- (95)
+=== Finished recursive analysis for function apply2: 3 ===
+
+
+=== Starting retuse analysis for function apply3 ===
+-> number of exit blocks: 1
+[ret-bt] fount fallup
+[ret-bt] outgoing edge of up is indirect call=== Finished retuse analysis for function apply3: 1 ===
+
+
+=== Starting conclusive analysis for function apply3 ===
+[ft] 0x400629 ? (block has 55)
+[ft]  0x400629 <- 0x40064f ? (block has 0)
+[ft]  0x400629 <- 0x40064f <- (0)
+[ft] blck_bitmap = R R R R C C  (block 0x400629)
+[ft]      bitmap = C C C C C C 
+[ft] comb_bitmap = C C C C C C 
+[ft] updt_bitmap = R R R R C C 
+[ft] 0x400629 <- (55)
+=== Finished recursive analysis for function apply3: 4 ===
+
+
+=== Starting retuse analysis for function main ===
+-> number of exit blocks: 1
+[ret-bt] RAX is written in block
+=== Finished retuse analysis for function main: 1 ===
+
+
+=== Starting conclusive analysis for function main ===
+[ft] 0x400651 ? (block has 0)
+[ft]  0x400651 <- 0x40067f ? (block has 0)
+[ft]   0x400651 <- 0x40067f <- 0x400669 ? (block has 2a)
+[ft]    0x400651 <- 0x40067f <- 0x400669 <- 0x4005a5 ? (block has 25)
+[ft]     0x400651 <- 0x40067f <- 0x400669 <- 0x4005a5 <- 0x400678 ? (block has 0)
+[ft]     0x400651 <- 0x40067f <- 0x400669 <- 0x4005a5 <- 0x400678 <- (0)
+[ft]    blck_bitmap = R R W C C C  (block 0x4005a5)
+[ft]         bitmap = C C C C C C 
+[ft]    comb_bitmap = C C C C C C 
+[ft]    updt_bitmap = R R W C C C 
+[ft]    0x400651 <- 0x40067f <- 0x400669 <- 0x4005a5 <- (25)
+[ft]   blck_bitmap = W W W C C C  (block 0x400669)
+[ft]        bitmap = R R W C C C 
+[ft]   comb_bitmap = R R W C C C 
+[ft]   updt_bitmap = W W W C C C 
+[ft]   0x400651 <- 0x40067f <- 0x400669 <- (2a)
+[ft]   0x400651 <- 0x40067f <- 0x400685 ? (block has 2a)
+[ft]    0x400651 <- 0x40067f <- 0x400685 <- 0x4005e9 ? (block has 25)
+[ft]    blck_bitmap = R R W C C C  (block 0x4005e9)
+[ft]         bitmap = C C C C C C 
+[ft]    comb_bitmap = C C C C C C 
+[ft]    updt_bitmap = R R W C C C 
+[ft]    0x400651 <- 0x40067f <- 0x400685 <- 0x4005e9 <- (25)
+[ft]   blck_bitmap = W W W C C C  (block 0x400685)
+[ft]        bitmap = R R W C C C 
+[ft]   comb_bitmap = R R W C C C 
+[ft]   updt_bitmap = W W W C C C 
+[ft]   0x400651 <- 0x40067f <- 0x400685 <- (2a)
+[ft]  blck_bitmap = C C C C C C  (block 0x40067f)
+[ft]       bitmap = W W W C C C 
+[ft]       bitmap = W W W C C C 
+[ft]  comb_bitmap = W W W C C C 
+[ft]  updt_bitmap = W W W C C C 
+[ft]  0x400651 <- 0x40067f <- (2a)
+[ft] blck_bitmap = C C C C C C  (block 0x400651)
+[ft]      bitmap = W W W C C C 
+[ft] comb_bitmap = W W W C C C 
+[ft] updt_bitmap = W W W C C C 
+[ft] 0x400651 <- (2a)
+=== Finished recursive analysis for function main: 0 ===
+
+
+=== Starting retuse analysis for function __libc_csu_init ===
+-> number of exit blocks: 1
+=== Finished retuse analysis for function __libc_csu_init: 1 ===
+
+
+=== Starting conclusive analysis for function __libc_csu_init ===
+[ft] 0x400730 ? (block has 15)
+[ft]  0x400730 <- 0x400440 ? (block has 0)
+[ft]  blck_bitmap = C C C C C C  (block 0x400440)
+[ft]       bitmap = C C C C C C 
+[ft]       bitmap = C C C C C C 
+[ft]  comb_bitmap = C C C C C C 
+[ft]  updt_bitmap = C C C C C C 
+[ft]  0x400730 <- 0x400440 <- (0)
+[ft] blck_bitmap = R R R C C C  (block 0x400730)
+[ft]      bitmap = C C C C C C 
+[ft] comb_bitmap = C C C C C C 
+[ft] updt_bitmap = R R R C C C 
+[ft] 0x400730 <- (15)
+=== Finished recursive analysis for function __libc_csu_init: 3 ===
+
+
+=== Starting retuse analysis for function __libc_csu_fini ===
+-> number of exit blocks: 1
+=== Finished retuse analysis for function __libc_csu_fini: 0 ===
+
+
+=== Starting conclusive analysis for function __libc_csu_fini ===
+[ft] 0x4007a0 ? (block has c0)
+[ft] 0x4007a0 <- (c0)
+=== Finished recursive analysis for function __libc_csu_fini: 0 ===
+
+
+=== Starting retuse analysis for function _fini ===
+-> number of exit blocks: 1
+=== Finished retuse analysis for function _fini: 0 ===
+
+
+=== Starting conclusive analysis for function _fini ===
+[ft] 0x4007a4 ? (block has 0)
+[ft] 0x4007a4 <- (0)
+=== Finished recursive analysis for function _fini: 0 ===
+
+
+_init() got icall in basic block: 0x400450
+[bt] 0x400450 -> ? (block has 555)
+[bt]  0x400440 -> 0x400450 -> ? (block has 555)
+[bt]   0x400730 -> 0x400440 -> 0x400450 -> ? (block has 555)
+[bt]   0x400730 -> 0x400440 -> 0x400450 -> (aaa)
+[bt]  0x400440 -> 0x400450 -> (aaa)
+[bt] 0x400450 -> (aaa)
+!! icallsite _init.0 sets exactly 6 arguments !!
+[bt] icall _init.0 (0x400450) may benefit from profiling (now: 6 args): lone (possible AT) function: __libc_csu_init (0x400730)
+
+_start() got icall in basic block: 0x4004a0
+[bt] 0x4004a0 -> ? (block has aaa)
+[bt] (aaa)
+!! icallsite _start.0 sets exactly 6 arguments !!
+
+apply1() got icall in basic block: 0x4005e9
+[bt] 0x4005e9 -> ? (block has 566)
+[bt]  0x400685 -> 0x4005e9 -> ? (block has 56a)
+[bt]   0x40067f -> 0x400685 -> 0x4005e9 -> ? (block has 555)
+[bt]    0x400651 -> 0x40067f -> 0x400685 -> 0x4005e9 -> ? (block has 555)
+[bt]    0x400651 -> 0x40067f -> 0x400685 -> 0x4005e9 -> (aaa)
+[bt]    0x400678 -> 0x40067f -> 0x400685 -> 0x4005e9 -> ? (block has 555)
+[bt]    0x400678 -> 0x40067f -> 0x400685 -> 0x4005e9 -> (0)
+[bt]   0x40067f -> 0x400685 -> 0x4005e9 -> (0)
+[bt]  0x400685 -> 0x4005e9 -> (2a)
+[bt] 0x4005e9 -> (2a)
+!! icallsite apply1.0 sets exactly 3 arguments !!
+[bt] icall apply1.0 (0x400601) may benefit from profiling (now: 3 args): lone (possible AT) function: main (0x400651)
+
+apply2() got icall in basic block: 0x400605
+[bt] 0x400605 -> ? (block has 5aa)
+[bt]  0x400699 -> 0x400605 -> ? (block has 5aa)
+[bt]  0x400699 -> 0x400605 -> (aa)
+[bt] 0x400605 -> (aa)
+!! icallsite apply2.0 sets exactly 4 arguments !!
+
+apply3() got icall in basic block: 0x400629
+[bt] 0x400629 -> ? (block has 5aa)
+[bt]  0x4006b5 -> 0x400629 -> ? (block has 5aa)
+[bt]  0x4006b5 -> 0x400629 -> (aa)
+[bt] 0x400629 -> (aa)
+!! icallsite apply3.0 sets exactly 4 arguments !!
+
+__libc_csu_init() got icall in basic block: 0x400770
+[bt] 0x400770 -> ? (block has 56a)
+[bt]  0x400766 -> 0x400770 -> ? (block has 555)
+[bt]   0x400761 -> 0x400766 -> 0x400770 -> ? (block has 555)
+[bt]   0x400761 -> 0x400766 -> 0x400770 -> (0)
+[bt]  0x400766 -> 0x400770 -> (0)
+[bt]  0x40077d -> 0x400770 -> ? (block has 555)
+[bt]  0x40077d -> 0x400770 -> (0)
+[bt] 0x400770 -> (2a)
+!! icallsite __libc_csu_init.0 sets exactly 3 arguments !!
+[+] Done...
+--detaching--
+--detached--

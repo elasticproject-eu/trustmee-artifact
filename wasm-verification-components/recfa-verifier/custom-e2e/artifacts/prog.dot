@@ -1,0 +1,292 @@
+digraph G {
+	 subgraph cluster_0 { 
+		 label="_init"; 
+		 color=blue;
+		"400440" [shape=box]
+		"400440" [label = "_init\n400440"];
+		"[400440,40044e";
+		"[400450,400450";
+		"[400452,400456";
+	}
+	"400440" -> "400450"
+	"400440" -> "400452"
+	"400450" -> "ffffffffffffffff" [color=blue]
+	"400450" -> "400452"
+	"400452" -> "ffffffffffffffff" [color=green]
+	"400452" -> "400761" [color=green]
+
+	 subgraph cluster_1 { 
+		 label="fclose"; 
+		 color=blue;
+		"400470" [shape=box]
+		"400470" [label = "fclose\n400470"];
+		"[400470,400470";
+	}
+	"400470" -> "ffffffffffffffff"
+
+	 subgraph cluster_2 { 
+		 label="fprintf"; 
+		 color=blue;
+		"400480" [shape=box]
+		"400480" [label = "fprintf\n400480"];
+		"[400480,400480";
+	}
+	"400480" -> "ffffffffffffffff"
+
+	 subgraph cluster_3 { 
+		 label="fopen"; 
+		 color=blue;
+		"400490" [shape=box]
+		"400490" [label = "fopen\n400490"];
+		"[400490,400490";
+	}
+	"400490" -> "ffffffffffffffff"
+
+	 subgraph cluster_4 { 
+		 label="_start"; 
+		 color=blue;
+		"4004a0" [shape=box,color=red]
+		"4004a0" [label = "_start\n4004a0"];
+		"[4004a0,4004c4";
+		"[4004ca,4004ca";
+	}
+	"4004a0" -> "ffffffffffffffff" [color=blue]
+	"4004a0" -> "4004ca"
+
+	 subgraph cluster_5 { 
+		 label="_dl_relocate_static_pie"; 
+		 color=blue;
+		"4004d0" [shape=box]
+		"4004d0" [label = "_dl_relocate_static_pie\n4004d0"];
+		"[4004d0,4004d0";
+	}
+	"4004d0" -> "ffffffffffffffff" [color=green]
+
+	 subgraph cluster_6 { 
+		 label="deregister_tm_clones"; 
+		 color=blue;
+		"4004e0" [shape=box]
+		"4004e0" [label = "deregister_tm_clones\n4004e0"];
+		"[4004e0,4004ef";
+		"[4004f1,4004f9";
+		"[4004fb,400501";
+		"[400508,400509";
+	}
+	"4004e0" -> "4004f1"
+	"4004e0" -> "400508"
+	"4004f1" -> "4004fb"
+	"4004f1" -> "400508"
+	"4004fb" -> "ffffffffffffffff"
+	"400508" -> "ffffffffffffffff" [color=green]
+	"400508" -> "400562" [color=green]
+
+	 subgraph cluster_7 { 
+		 label="register_tm_clones"; 
+		 color=blue;
+		"400510" [shape=box]
+		"400510" [label = "register_tm_clones\n400510"];
+		"[400510,400531";
+		"[400533,40053b";
+		"[40053d,400543";
+		"[400548,400549";
+	}
+	"400510" -> "400533"
+	"400510" -> "400548"
+	"400533" -> "40053d"
+	"400533" -> "400548"
+	"40053d" -> "ffffffffffffffff"
+	"400548" -> "ffffffffffffffff" [color=green]
+
+	 subgraph cluster_8 { 
+		 label="__do_global_dtors_aux"; 
+		 color=blue;
+		"400550" [shape=box]
+		"400550" [label = "__do_global_dtors_aux\n400550"];
+		"[400550,400557";
+		"[400559,40055d";
+		"[400562,40056a";
+		"[400570,400570";
+	}
+	"400550" -> "400559"
+	"400550" -> "400570"
+	"400559" -> "4004e0" [color=blue]
+	"400559" -> "400562"
+	"400562" -> "ffffffffffffffff" [color=green]
+	"400570" -> "ffffffffffffffff" [color=green]
+
+	 subgraph cluster_9 { 
+		 label="frame_dummy"; 
+		 color=blue;
+		"400580" [shape=box]
+		"400580" [label = "frame_dummy\n400580"];
+		"[400580,400585";
+	}
+	"400580" -> "400510"
+
+	 subgraph cluster_10 { 
+		 label="neg"; 
+		 color=blue;
+		"400587" [shape=box]
+		"400587" [label = "neg\n400587"];
+		"[400587,400594";
+	}
+	"400587" -> "ffffffffffffffff" [color=green]
+
+	 subgraph cluster_11 { 
+		 label="square"; 
+		 color=blue;
+		"400595" [shape=box]
+		"400595" [label = "square\n400595"];
+		"[400595,4005a4";
+	}
+	"400595" -> "ffffffffffffffff" [color=green]
+
+	 subgraph cluster_12 { 
+		 label="add"; 
+		 color=blue;
+		"4005a5" [shape=box]
+		"4005a5" [label = "add\n4005a5"];
+		"[4005a5,4005b8";
+	}
+	"4005a5" -> "ffffffffffffffff" [color=green]
+	"4005a5" -> "400678" [color=green]
+
+	 subgraph cluster_13 { 
+		 label="mul"; 
+		 color=blue;
+		"4005b9" [shape=box]
+		"4005b9" [label = "mul\n4005b9"];
+		"[4005b9,4005cb";
+	}
+	"4005b9" -> "ffffffffffffffff" [color=green]
+
+	 subgraph cluster_14 { 
+		 label="fma3"; 
+		 color=blue;
+		"4005cc" [shape=box]
+		"4005cc" [label = "fma3\n4005cc"];
+		"[4005cc,4005e8";
+	}
+	"4005cc" -> "ffffffffffffffff" [color=green]
+
+	 subgraph cluster_15 { 
+		 label="apply1"; 
+		 color=blue;
+		"4005e9" [shape=box]
+		"4005e9" [label = "apply1\n4005e9"];
+		"[4005e9,400601";
+		"[400603,400604";
+	}
+	"4005e9" -> "ffffffffffffffff" [color=blue]
+	"4005e9" -> "400603"
+	"400603" -> "ffffffffffffffff" [color=green]
+	"400603" -> "400699" [color=green]
+
+	 subgraph cluster_16 { 
+		 label="apply2"; 
+		 color=blue;
+		"400605" [shape=box]
+		"400605" [label = "apply2\n400605"];
+		"[400605,400625";
+		"[400627,400628";
+	}
+	"400605" -> "ffffffffffffffff" [color=blue]
+	"400605" -> "400627"
+	"400627" -> "ffffffffffffffff" [color=green]
+	"400627" -> "4006b5" [color=green]
+
+	 subgraph cluster_17 { 
+		 label="apply3"; 
+		 color=blue;
+		"400629" [shape=box]
+		"400629" [label = "apply3\n400629"];
+		"[400629,40064d";
+		"[40064f,400650";
+	}
+	"400629" -> "ffffffffffffffff" [color=blue]
+	"400629" -> "40064f"
+	"40064f" -> "ffffffffffffffff" [color=green]
+	"40064f" -> "4006d4" [color=green]
+
+	 subgraph cluster_18 { 
+		 label="main"; 
+		 color=blue;
+		"400651" [shape=box]
+		"400651" [label = "main\n400651"];
+		"[400651,400667";
+		"[400669,400673";
+		"[400678,40067b";
+		"[40067f,400683";
+		"[400685,400694";
+		"[400699,4006b0";
+		"[4006b5,4006cf";
+		"[4006d4,4006e5";
+		"[4006ea,4006f3";
+		"[4006f5,40070b";
+		"[400710,400717";
+		"[40071c,400722";
+	}
+	"400651" -> "40067f"
+	"400669" -> "4005a5" [color=blue]
+	"400669" -> "400678"
+	"400678" -> "40067f"
+	"40067f" -> "400685"
+	"40067f" -> "400669"
+	"400685" -> "4005e9" [color=blue]
+	"400685" -> "400699"
+	"400699" -> "400605" [color=blue]
+	"400699" -> "4006b5"
+	"4006b5" -> "400629" [color=blue]
+	"4006b5" -> "4006d4"
+	"4006d4" -> "400490" [color=blue]
+	"4006d4" -> "4006ea"
+	"4006ea" -> "4006f5"
+	"4006ea" -> "40071c"
+	"4006f5" -> "400480" [color=blue]
+	"4006f5" -> "400710"
+	"400710" -> "400470" [color=blue]
+	"400710" -> "40071c"
+	"40071c" -> "ffffffffffffffff" [color=green]
+
+	 subgraph cluster_19 { 
+		 label="__libc_csu_init"; 
+		 color=blue;
+		"400730" [shape=box]
+		"400730" [label = "__libc_csu_init\n400730"];
+		"[400730,40075c";
+		"[400761,400764";
+		"[400766,400768";
+		"[400770,400779";
+		"[40077d,400784";
+		"[400786,400794";
+	}
+	"400730" -> "400440" [color=blue]
+	"400730" -> "400761"
+	"400761" -> "400766"
+	"400761" -> "400786"
+	"400766" -> "400770"
+	"400770" -> "ffffffffffffffff" [color=blue]
+	"400770" -> "40077d"
+	"40077d" -> "400786"
+	"40077d" -> "400770"
+	"400786" -> "ffffffffffffffff" [color=green]
+
+	 subgraph cluster_20 { 
+		 label="__libc_csu_fini"; 
+		 color=blue;
+		"4007a0" [shape=box]
+		"4007a0" [label = "__libc_csu_fini\n4007a0"];
+		"[4007a0,4007a0";
+	}
+	"4007a0" -> "ffffffffffffffff" [color=green]
+
+	 subgraph cluster_21 { 
+		 label="_fini"; 
+		 color=blue;
+		"4007a4" [shape=box]
+		"4007a4" [label = "_fini\n4007a4"];
+		"[4007a4,4007ac";
+	}
+	"4007a4" -> "ffffffffffffffff" [color=green]
+
+}

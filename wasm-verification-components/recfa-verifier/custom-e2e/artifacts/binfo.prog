@@ -1,0 +1,238 @@
+Object: prog
+Functions: 22
+
+[varargs]
+
+[args]
+0x400440 = 0 (_init) 
+0x4004a0 = 3 (_start) 
+0x4004d0 = 0 (_dl_relocate_static_pie) 
+0x4004e0 = 0 (deregister_tm_clones) 
+0x400510 = 0 (register_tm_clones) 
+0x400550 = 0 (__do_global_dtors_aux) 
+0x400580 = 0 (frame_dummy) 
+0x400587 = 1 (neg) 
+0x400595 = 1 (square) 
+0x4005a5 = 2 (add) 
+0x4005b9 = 2 (mul) 
+0x4005cc = 3 (fma3) 
+0x4005e9 = 2 (apply1) 
+0x400605 = 3 (apply2) 
+0x400629 = 4 (apply3) 
+0x400651 = 0 (main) 
+0x400730 = 3 (__libc_csu_init) 
+0x4007a0 = 0 (__libc_csu_fini) 
+0x4007a4 = 0 (_fini) 
+
+[icall-args]
+0x400450 = 6 (_init.0)
+0x4004c4 = 6 (_start.0)
+0x400601 = 3 (apply1.0)
+0x400625 = 4 (apply2.0)
+0x40064d = 4 (apply3.0)
+0x400779 = 3 (__libc_csu_init.0)
+
+[plts]
+0x400470 = fclose
+0x400480 = fprintf
+0x400490 = fopen
+
+[disas-errors]
+
+[non-voids]
+0x400440 = _init
+0x4004a0 = _start
+0x4004e0 = deregister_tm_clones
+0x400510 = register_tm_clones
+0x400580 = frame_dummy
+0x400587 = neg
+0x400595 = square
+0x4005a5 = add
+0x4005b9 = mul
+0x4005cc = fma3
+0x4005e9 = apply1
+0x400605 = apply2
+0x400629 = apply3
+0x400651 = main
+0x400730 = __libc_csu_init
+
+[non-void-icalls]
+
+[prof-goals]
+0x400450 = _init.0 -> 0x400730 = __libc_csu_init
+0x400601 = apply1.0 -> 0x400651 = main
+  the name of the type is  int 
+  the class name of the type is  BPatch_dataScalar 
+  size of this paramter is 4  
+  the name of the type is  int 
+  the class name of the type is  BPatch_dataScalar 
+  size of this paramter is 4  
+  the name of the type is  int 
+  the class name of the type is  BPatch_dataScalar 
+  size of this paramter is 4  
+  the name of the type is  int 
+  the class name of the type is  BPatch_dataScalar 
+  size of this paramter is 4  
+  the name of the type is  int 
+  the class name of the type is  BPatch_dataScalar 
+  size of this paramter is 4  
+  the name of the type is  int 
+  the class name of the type is  BPatch_dataScalar 
+  size of this paramter is 4  
+  the name of the type is  int 
+  the class name of the type is  BPatch_dataScalar 
+  size of this paramter is 4  
+  the name of the type is  int 
+  the class name of the type is  BPatch_dataScalar 
+  size of this paramter is 4  
+  the name of the type is  int 
+  the class name of the type is  BPatch_dataScalar 
+  size of this paramter is 4  
+  the name of the type is  unop 
+  the class name of the type is  BPatch_dataTypeDefine 
+  size of this paramter is 8  
+  the name of the type is  int 
+  the class name of the type is  BPatch_dataScalar 
+  size of this paramter is 4  
+  the name of the type is  binop 
+  the class name of the type is  BPatch_dataTypeDefine 
+  size of this paramter is 8  
+  the name of the type is  int 
+  the class name of the type is  BPatch_dataScalar 
+  size of this paramter is 4  
+  the name of the type is  int 
+  the class name of the type is  BPatch_dataScalar 
+  size of this paramter is 4  
+  the name of the type is  ternop 
+  the class name of the type is  BPatch_dataTypeDefine 
+  size of this paramter is 8  
+  the name of the type is  int 
+  the class name of the type is  BPatch_dataScalar 
+  size of this paramter is 4  
+  the name of the type is  int 
+  the class name of the type is  BPatch_dataScalar 
+  size of this paramter is 4  
+  the name of the type is  int 
+  the class name of the type is  BPatch_dataScalar 
+  size of this paramter is 4  
+  the size of _icall_args_ is  6  
+  the size of _func_to_int_ is  17  
+  the size of _icall_number is  6  
+  now is going to handle the functions   
+Indirectstar0x400601  3 Indirectend0x400651 0 
+Indirectstar0x400601  3 Indirectend0x400587 1 
+Indirectstar0x400601  3 Indirectend0x400595 1 
+Indirectstar0x400601  3 Indirectend0x4005a5 2 
+Indirectstar0x400601  3 Indirectend0x4005b9 2 
+Indirectstar0x400601  3 Indirectend0x4005cc 3 
+Indirectstar0x400601  3 Indirectend0x4005e9 2 
+Indirectstar0x400601  3 Indirectend0x400605 3 
+Indirectstar0x400601  3 Indirectend0x400440 0 
+Indirectstar0x400601  3 Indirectend0x4004a0 3 
+Indirectstar0x400601  3 Indirectend0x4004d0 0 
+Indirectstar0x400601  3 Indirectend0x400550 0 
+Indirectstar0x400601  3 Indirectend0x400580 0 
+Indirectstar0x400601  3 Indirectend0x400730 3 
+Indirectstar0x400601  3 Indirectend0x4007a0 0 
+Indirectstar0x400601  3 Indirectend0x4007a4 0 
+Indirectstar0x400625  4 Indirectend0x400651 0 
+Indirectstar0x400625  4 Indirectend0x400587 1 
+Indirectstar0x400625  4 Indirectend0x400595 1 
+Indirectstar0x400625  4 Indirectend0x4005a5 2 
+Indirectstar0x400625  4 Indirectend0x4005b9 2 
+Indirectstar0x400625  4 Indirectend0x4005cc 3 
+Indirectstar0x400625  4 Indirectend0x4005e9 2 
+Indirectstar0x400625  4 Indirectend0x400605 3 
+Indirectstar0x400625  4 Indirectend0x400629 4 
+Indirectstar0x400625  4 Indirectend0x400440 0 
+Indirectstar0x400625  4 Indirectend0x4004a0 3 
+Indirectstar0x400625  4 Indirectend0x4004d0 0 
+Indirectstar0x400625  4 Indirectend0x400550 0 
+Indirectstar0x400625  4 Indirectend0x400580 0 
+Indirectstar0x400625  4 Indirectend0x400730 3 
+Indirectstar0x400625  4 Indirectend0x4007a0 0 
+Indirectstar0x400625  4 Indirectend0x4007a4 0 
+Indirectstar0x40064d  4 Indirectend0x400651 0 
+Indirectstar0x40064d  4 Indirectend0x400587 1 
+Indirectstar0x40064d  4 Indirectend0x400595 1 
+Indirectstar0x40064d  4 Indirectend0x4005a5 2 
+Indirectstar0x40064d  4 Indirectend0x4005b9 2 
+Indirectstar0x40064d  4 Indirectend0x4005cc 3 
+Indirectstar0x40064d  4 Indirectend0x4005e9 2 
+Indirectstar0x40064d  4 Indirectend0x400605 3 
+Indirectstar0x40064d  4 Indirectend0x400629 4 
+Indirectstar0x40064d  4 Indirectend0x400440 0 
+Indirectstar0x40064d  4 Indirectend0x4004a0 3 
+Indirectstar0x40064d  4 Indirectend0x4004d0 0 
+Indirectstar0x40064d  4 Indirectend0x400550 0 
+Indirectstar0x40064d  4 Indirectend0x400580 0 
+Indirectstar0x40064d  4 Indirectend0x400730 3 
+Indirectstar0x40064d  4 Indirectend0x4007a0 0 
+Indirectstar0x40064d  4 Indirectend0x4007a4 0 
+Indirectstar0x400779  3 Indirectend0x400651 0 
+Indirectstar0x400779  3 Indirectend0x400587 1 
+Indirectstar0x400779  3 Indirectend0x400595 1 
+Indirectstar0x400779  3 Indirectend0x4005a5 2 
+Indirectstar0x400779  3 Indirectend0x4005b9 2 
+Indirectstar0x400779  3 Indirectend0x4005cc 3 
+Indirectstar0x400779  3 Indirectend0x4005e9 2 
+Indirectstar0x400779  3 Indirectend0x400605 3 
+Indirectstar0x400779  3 Indirectend0x400440 0 
+Indirectstar0x400779  3 Indirectend0x4004a0 3 
+Indirectstar0x400779  3 Indirectend0x4004d0 0 
+Indirectstar0x400779  3 Indirectend0x400550 0 
+Indirectstar0x400779  3 Indirectend0x400580 0 
+Indirectstar0x400779  3 Indirectend0x400730 3 
+Indirectstar0x400779  3 Indirectend0x4007a0 0 
+Indirectstar0x400779  3 Indirectend0x4007a4 0 
+Indirectstar0x400450  6 Indirectend0x400651 0 
+Indirectstar0x400450  6 Indirectend0x400587 1 
+Indirectstar0x400450  6 Indirectend0x400595 1 
+Indirectstar0x400450  6 Indirectend0x4005a5 2 
+Indirectstar0x400450  6 Indirectend0x4005b9 2 
+Indirectstar0x400450  6 Indirectend0x4005cc 3 
+Indirectstar0x400450  6 Indirectend0x4005e9 2 
+Indirectstar0x400450  6 Indirectend0x400605 3 
+Indirectstar0x400450  6 Indirectend0x400629 4 
+Indirectstar0x400450  6 Indirectend0x400440 0 
+Indirectstar0x400450  6 Indirectend0x4004a0 3 
+Indirectstar0x400450  6 Indirectend0x4004d0 0 
+Indirectstar0x400450  6 Indirectend0x400550 0 
+Indirectstar0x400450  6 Indirectend0x400580 0 
+Indirectstar0x400450  6 Indirectend0x400730 3 
+Indirectstar0x400450  6 Indirectend0x4007a0 0 
+Indirectstar0x400450  6 Indirectend0x4007a4 0 
+Indirectstar0x4004c4  6 Indirectend0x400651 0 
+Indirectstar0x4004c4  6 Indirectend0x400587 1 
+Indirectstar0x4004c4  6 Indirectend0x400595 1 
+Indirectstar0x4004c4  6 Indirectend0x4005a5 2 
+Indirectstar0x4004c4  6 Indirectend0x4005b9 2 
+Indirectstar0x4004c4  6 Indirectend0x4005cc 3 
+Indirectstar0x4004c4  6 Indirectend0x4005e9 2 
+Indirectstar0x4004c4  6 Indirectend0x400605 3 
+Indirectstar0x4004c4  6 Indirectend0x400629 4 
+Indirectstar0x4004c4  6 Indirectend0x400440 0 
+Indirectstar0x4004c4  6 Indirectend0x4004a0 3 
+Indirectstar0x4004c4  6 Indirectend0x4004d0 0 
+Indirectstar0x4004c4  6 Indirectend0x400550 0 
+Indirectstar0x4004c4  6 Indirectend0x400580 0 
+Indirectstar0x4004c4  6 Indirectend0x400730 3 
+Indirectstar0x4004c4  6 Indirectend0x4007a0 0 
+Indirectstar0x4004c4  6 Indirectend0x4007a4 0 
+  now finished handling the process and going to    
+ the number of functions that a call site could target at are blow 
+0x400601 = 16  
+ the number of functions that a call site could target at are blow 
+0x400625 = 17  
+ the number of functions that a call site could target at are blow 
+0x40064d = 17  
+ the number of functions that a call site could target at are blow 
+0x400779 = 16  
+ the number of functions that a call site could target at are blow 
+0x400450 = 17  
+ the number of functions that a call site could target at are blow 
+0x4004c4 = 17  
+
+[unused]
+
+[done]

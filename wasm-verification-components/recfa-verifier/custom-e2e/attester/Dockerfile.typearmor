@@ -1,0 +1,79 @@
+# Patched-typearmor image: the only way to produce ReCFA's policy F.
+#
+# ReCFA's policy F (`binfo.*`) comes from TypeArmor's static pass with the ReCFA
+# patch applied, and TypeArmor wants Dyninst 9.3.1 on Ubuntu 16.04 — a different
+# pair than the Dyninst 10.1 / Ubuntu 18.04 the rest of ReCFA needs, which is why
+# upstream tells you to run it in a separate VM. A container does the same job.
+#
+#   docker build -f Dockerfile.typearmor -t recfa-typearmor .
+#
+# Build takes tens of minutes (Dyninst from source) and a few GB of disk.
+FROM ubuntu:16.04
+
+# Do NOT rewrite sources.list to old-releases.ubuntu.com: xenial is not there
+# (every dist 404s), exactly as with bionic in Dockerfile.recfa. Despite being
+# EOL, xenial is still served by the default archive.ubuntu.com /
+# security.ubuntu.com, so the image's own sources work.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      build-essential cmake m4 flex bison git wget ca-certificates \
+      zlib1g-dev libboost-all-dev libelf-dev libiberty-dev \
+ && rm -rf /var/lib/apt/lists/*
+# Deliberately NOT installing libdwarf-dev, and ReCFA-dev's warning about it is
+# right for a concrete reason: xenial ships libdwarf only as a non-PIC static
+# archive, so linking it into Dyninst's shared libdynDwarf.so dies with
+# "relocation R_X86_64_32S ... recompile with -fPIC".
+
+# libdwarf, built shared. Dyninst 9.3.1 would fetch and build exactly this
+# version itself, but its URL (www.paradyn.org/libdwarf/libdwarf-20130126.tar.gz)
+# now 404s, so we fetch the same release from libdwarf's own author and hand the
+# result to Dyninst's find_package below. The configure/build flags mirror
+# Dyninst's own ExternalProject_Add(LibDwarf) recipe in cmake/packages.cmake.
+WORKDIR /opt
+RUN wget -q https://www.prevanders.net/libdwarf-20130126.tar.gz \
+ && tar -xzf libdwarf-20130126.tar.gz \
+ && rm libdwarf-20130126.tar.gz \
+ && cd /opt/dwarf-20130126/libdwarf \
+ && CFLAGS="-fPIC" ./configure --enable-shared \
+ && make \
+ && mkdir -p /opt/libdwarf/include /opt/libdwarf/lib \
+ && install libdwarf.h dwarf.h /opt/libdwarf/include \
+ && install libdwarf.so /opt/libdwarf/lib
+
+# TypeArmor's Makefile.inc pulls headers straight out of the Dyninst *source*
+# tree plus $DYNINST_ROOT/install, so Dyninst has to be built in-tree under
+# install/ exactly as its own README describes.
+WORKDIR /opt
+RUN wget -q https://github.com/dyninst/dyninst/archive/v9.3.1.tar.gz \
+ && tar -xzf v9.3.1.tar.gz \
+ && rm v9.3.1.tar.gz
+RUN mkdir -p /opt/dyninst-9.3.1/install \
+ && cd /opt/dyninst-9.3.1/install \
+ && cmake .. -DCMAKE_INSTALL_PREFIX=/opt/dyninst-9.3.1/install \
+      -DLIBDWARF_INCLUDE_DIR=/opt/libdwarf/include \
+      -DLIBDWARF_LIBRARIES=/opt/libdwarf/lib/libdwarf.so \
+ && (make -j"$(nproc)" || make) \
+ && make install
+
+ENV DYNINST_ROOT=/opt/dyninst-9.3.1
+ENV DYNINST_LIB=$DYNINST_ROOT/install/lib
+ENV DYNINSTAPI_RT_LIB=$DYNINST_LIB/libdyninstAPI_RT.so
+ENV LD_LIBRARY_PATH=$DYNINST_LIB
+
+# TypeArmor, with ReCFA's patch. The patch is a single replacement file,
+# static/fcfi_pass.C, and it is what makes the pass additionally emit the
+#   Indirectstar0x<site>  <argc> Indirectend0x<target>
+# lines that ReCFA's verifier parses as policy F. Stock TypeArmor emits argument
+# counts only, which the verifier cannot use.
+RUN git clone --depth 1 https://github.com/vusec/typearmor.git /opt/typearmor \
+ && git clone --depth 1 https://github.com/suncongxd/ReCFA-dev.git /opt/ReCFA-dev \
+ && cp /opt/ReCFA-dev/typearmor/static/fcfi_pass.C /opt/typearmor/static/fcfi_pass.C \
+ && git -C /opt/typearmor rev-parse HEAD > /opt/typearmor.sha \
+ && git -C /opt/ReCFA-dev rev-parse HEAD > /opt/ReCFA-dev.sha \
+ && rm -rf /opt/ReCFA-dev/spec_gcc /opt/ReCFA-dev/spec_llvm /opt/typearmor/server-bins/*
+# `out/` must exist before the pass runs, or TypeArmor segfaults (upstream note).
+RUN mkdir -p /opt/typearmor/out \
+ && cd /opt/typearmor/static && make && make install \
+ && cd /opt/typearmor/di-opt && make && make install
+
+WORKDIR /work

@@ -1,0 +1,10 @@
+{
+  "signers": [
+    {
+      "allow_network": true,
+      "fuel": -1,
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAhEtoYCBsT71v4mgiLhec0umwAFN28Dx9ZryfbRx9+zs=\n-----END PUBLIC KEY-----\n",
+      "valid_until": "2035-01-01T00:00:00Z"
+    }
+  ]
+}

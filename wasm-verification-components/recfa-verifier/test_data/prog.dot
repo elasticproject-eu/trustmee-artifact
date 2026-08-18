@@ -1,0 +1,21 @@
+digraph G {
+	 subgraph cluster_0 { 
+		 label="main"; 
+		 color=blue;
+		"401000" [shape=box]
+		"401000" [label = "main\n401000"];
+		"[401000,401010";
+		"[401015,401020";
+		"[401025,401030";
+	}
+	"401000" -> "401100" [color=blue]
+	"401025" -> "401040"
+
+	 subgraph cluster_1 { 
+		 label="foo"; 
+		 color=blue;
+		"401100" [shape=box]
+		"[401100,401110";
+	}
+
+}

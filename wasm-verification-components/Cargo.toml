@@ -2,6 +2,13 @@
 members = [
     "bootloader-verifier/bootloader-verifier-component",
     "bootloader-verifier/bootloader-verifier-test",
+    "infinite-loop-verifier/infinite-loop-verifier-component",
+    "kata-policy-verifier/kata-policy-core",
+    "kata-policy-verifier/kata-policy-verifier-component",
+    "kata-policy-verifier/kata-policy-verifier-test",
+    "kata-policy-verifier/stub-hardware-verifier-component",
+    "recfa-verifier/recfa-verifier-component",
+    "recfa-verifier/recfa-verifier-test",
     "snp-verifier/snp-verifier-component",
     "snp-verifier/snp-verifier-test",
     "snp-verifier-host-crypto/snp-verifier-host-crypto-component",

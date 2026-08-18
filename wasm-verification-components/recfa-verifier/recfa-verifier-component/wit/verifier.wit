@@ -1,0 +1,47 @@
+package trustee:verifier;
+
+interface verifier-interface {
+  variant optional-data {
+    value(list<u8>),
+    not-provided,
+  }
+
+  record endorsement {
+    label: string,
+    media-type: string,
+    payload: list<u8>,
+  }
+
+  record verifier-input {
+    evidence: list<u8>,
+    evidence-media-type: string,
+    endorsements: list<endorsement>,
+  }
+
+  type report-data = optional-data;
+  type init-data-hash = optional-data;
+
+  resource verifier {
+    constructor();
+    evaluate: func(
+      input: verifier-input,
+      expected-report-data: report-data,
+      expected-init-data-hash: init-data-hash,
+    ) -> string;
+  }
+}
+
+// Leaf verifier: appraises the ReCFA control-flow trace on its own.
+//
+// ReCFA evidence carries no hardware root of trust (see README), so in a real
+// deployment this component should sit underneath a TEE verifier. To do that,
+// swap this world for the layered form below and compose with `wac plug`; the
+// vendored C++ verifier does not change.
+//
+//   world recfa-verifier {
+//     import verifier-interface;
+//     export verifier-interface;
+//   }
+world recfa-verifier {
+  export verifier-interface;
+}

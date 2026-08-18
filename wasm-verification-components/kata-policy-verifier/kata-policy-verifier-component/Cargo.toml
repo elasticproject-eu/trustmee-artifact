@@ -1,0 +1,18 @@
+[package]
+name = "kata-policy-verifier-component"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+test = false
+doctest = false
+
+[package.metadata.component]
+package = "trustee:verifier"
+
+[dependencies]
+hex.workspace = true
+kata-policy-core = { path = "../kata-policy-core" }
+serde_json.workspace = true
+wit-bindgen = "0.46.0"

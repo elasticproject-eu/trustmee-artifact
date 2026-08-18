@@ -1,0 +1,45 @@
+get all func,func.size = 9
+Num of recursively called functions: 0
+get all func, func.size = 9
+Num of iJmps: 0
+Num of iCalls: 3
+Num of rets: 9
+Num of callAfterPoints: 7
+Num of dCalls: 4
+Num of skipped dCalls: 2
+Num of FuncExitPoints: 1
+Fopen success
+Initialization success
+get loop:9
+0, neg
+Num of current loop: 0
+1, square
+Num of current loop: 0
+2, add
+Num of current loop: 0
+3, mul
+Num of current loop: 0
+4, fma3
+Num of current loop: 0
+5, apply1
+Num of current loop: 0
+6, apply2
+Num of current loop: 0
+7, apply3
+Num of current loop: 0
+8, main
+loopsize = 1
+40067f Num of current loop: 1
+Nums of loop-body-start:1, loop-body-end:2，loop-entry:1, loop-exit:1
+loopStartPoints:0x40067f
+loopEndPoints:0x40067f
+loopEndPoints:0x400685
+loopEntryPoints:0x40067f
+loopExitPoints:0x400685
+ijumps success
+icalls success
+returns success
+notRecCallAfters success
+skipped dCalls success
+DumpExitFunc success
+Fclose success

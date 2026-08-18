@@ -1,0 +1,11 @@
+[package]
+name = "kata-policy-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+hex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+toml = { version = "0.8", default-features = false, features = ["parse"] }

@@ -1,0 +1,41 @@
+# ReCFA attester image: Ubuntu 18.04 + Dyninst 10.1 + binutils 2.30.
+#
+# This is the same image ATTESTER_SETUP.md step 2 describes; it runs everything
+# except policy F (that needs Dyninst 9.3.1, see Dockerfile.typearmor):
+# compilation, objdump, bin/preCFG, bin/mutator, the instrumented run, and
+# bin/folding.
+#
+#   docker build -f Dockerfile.recfa -t recfa-dyninst .
+#
+# binutils 2.30 is a requirement, not an accident: check.cpp matches `callq`,
+# `jmpq   *%rax` and `retq`, and binutils >= 2.35 prints those without the `q`,
+# which silently yields a disassembly in which no call site is found at all.
+FROM ubuntu:18.04
+
+# Do NOT rewrite sources.list to old-releases.ubuntu.com: bionic is not there
+# (every dist 404s). Despite being EOL, bionic is still served by the default
+# archive.ubuntu.com / security.ubuntu.com, so the image's own sources work.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      build-essential cmake m4 flex bison git wget ca-certificates \
+      zlib1g-dev libboost-all-dev libelf-dev libiberty-dev \
+      binutils zstd python3 unzip \
+ && rm -rf /var/lib/apt/lists/*
+# NOTE 1: deliberately NOT installing libdwarf-dev — upstream says it breaks the build.
+# NOTE 2: deliberately NOT installing libtbb-dev — bionic ships 2017~U7, below the
+#         2018.6 minimum Dyninst 10.1 requires, so Dyninst fetches its own copy.
+
+WORKDIR /opt
+RUN git clone --depth 1 --branch v10.1.0 https://github.com/dyninst/dyninst.git dyninst-10.1.0
+# Dyninst fetches and builds matching elfutils/TBB itself, so keep the network on
+# and do NOT set STERILE_BUILD.
+RUN mkdir -p /opt/dyninst-10.1.0/install && cd /opt/dyninst-10.1.0/install \
+ && cmake .. -DCMAKE_INSTALL_PREFIX=/opt/dyninst-10.1.0/install \
+ && make -j"$(nproc)" && make install
+
+ENV DYNINST_HOME=/opt/dyninst-10.1.0
+ENV DYNINST_INCLUDE=$DYNINST_HOME/install/include
+ENV DYNINST_LIB=$DYNINST_HOME/install/lib
+ENV DYNINSTAPI_RT_LIB=$DYNINST_LIB/libdyninstAPI_RT.so
+ENV LD_LIBRARY_PATH=$DYNINST_LIB
+WORKDIR /work

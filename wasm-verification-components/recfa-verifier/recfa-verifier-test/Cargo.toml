@@ -1,0 +1,13 @@
+[package]
+name = "recfa-verifier-test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+hex.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+wasmtime = { version = "=34.0.2", features = ["component-model"] }
+wasmtime-wasi = { version = "=34.0.2" }
