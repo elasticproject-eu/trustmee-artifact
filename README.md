@@ -1,6 +1,6 @@
 # TrustMee Artifact
 
-This repository is an artifact for the paper submission "TrustMee: Self-Verifying Remote Attestation Evidence" to ACM CCS 2026.
+This repository contains the artifact for the paper submission "TrustMee: Self-Verifying Remote Attestation Evidence."
 
 The code base is based on the Trustee project.
 
